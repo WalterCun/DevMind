@@ -7,16 +7,16 @@ Punto de entrada para todos los comandos de la interfaz de línea de comandos.
 
 import click
 from rich.console import Console
-from rich.panel import Panel
 
-from cli.commands.init import init_command
+from cli.commands import tools_group, addons_group
 from cli.commands.chat import chat_command
-from cli.commands.status import status_command
+from cli.commands.code import code_command
 from cli.commands.config import config_command
 from cli.commands.doctor import doctor_command
-from cli.commands.plan import plan_command
-from cli.commands.code import code_command
 from cli.commands.fix import fix_command
+from cli.commands.init import init_command
+from cli.commands.plan import plan_command
+from cli.commands.status import status_command
 
 console = Console()
 
@@ -65,6 +65,8 @@ main.add_command(doctor_command)
 main.add_command(plan_command)
 main.add_command(code_command)
 main.add_command(fix_command)
+main.add_command(tools_group)
+main.add_command(addons_group)
 
 if __name__ == '__main__':
     main()

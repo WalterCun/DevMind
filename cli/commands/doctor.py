@@ -346,6 +346,7 @@ class SystemDoctor:
         import urllib.request
         import json as json_lib
 
+        # Obtener URL de Ollama (puede ser local o remota)
         ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
 
         try:
@@ -356,48 +357,81 @@ class SystemDoctor:
 
                 if models:
                     model_names = [m['name'] for m in models]
+
+                    # Mensaje más claro sobre Ollama local
+                    location = "local" if "localhost" in ollama_url else f"remoto ({ollama_url})"
+
                     self._add_result(
                         "Ollama Connection",
                         True,
-                        f"Conectado: {ollama_url}",
-                        f"Modelos disponibles: {len(models)}"
+                        f"Conectado a Ollama {location}: {ollama_url}",
+                        f"Modelos disponibles: {len(models)}\n"
+                        f"Modelos: {', '.join(model_names[:5])}{'...' if len(model_names) > 5 else ''}"
                     )
 
                     # Verificar modelos recomendados
                     recommended = ['llama3', 'codellama', 'nomic-embed-text']
-                    available_recommended = [m for m in recommended if any(r in m.lower() for r in model_names)]
+                    available_recommended = [
+                        m for m in recommended
+                        if any(r in m.lower() for r in model_names)
+                    ]
 
                     if available_recommended:
                         self._add_result(
                             "Recommended Models",
                             True,
-                            f"{len(available_recommended)}/{len(recommended)} disponibles",
-                            f"Disponibles: {', '.join(available_recommended)}"
+                            f"{len(available_recommended)}/{len(recommended)} recomendados disponibles",
+                            f"Disponibles: {', '.join(available_recommended)}",
+                            None
                         )
                     else:
                         self._add_result(
                             "Recommended Models",
                             False,
                             "Ningún modelo recomendado encontrado",
-                            f"Recomendados: {', '.join(recommended)}",
-                            "Ejecuta: ollama pull llama3 && ollama pull codellama"
+                            f"Modelos disponibles: {', '.join(model_names[:3])}{'...' if len(model_names) > 3 else ''}",
+                            "Ejecuta: ollama pull llama3 && ollama pull codellama && ollama pull nomic-embed-text"
                         )
+
+                    # 💡 Nota informativa sobre Ollama
+                    self._add_result(
+                        "Ollama Architecture",
+                        True,  # Informativo, no crítico
+                        "Ollama ejecuta modelos LOCALMENTE",
+                        "ℹ️  Ollama.com es solo un catálogo de modelos\n"
+                        "ℹ️  Los modelos se descargan y ejecutan en TU hardware\n"
+                        "ℹ️  No hay ejecución de modelos en la nube de Ollama\n"
+                        "💡 Para LLMs en la nube, considera: OpenAI, Anthropic, Google Vertex AI",
+                        None
+                    )
+
                 else:
                     self._add_result(
                         "Ollama Models",
                         False,
                         "Sin modelos instalados",
-                        None,
-                        "Ejecuta: ollama pull llama3"
+                        "Ollama está corriendo pero no hay modelos descargados",
+                        "Ejecuta: ollama pull llama3:8b (modelo ligero recomendado)"
                     )
 
         except urllib.error.URLError as e:
+            # Determinar si es Ollama local o remoto
+            is_local = "localhost" in ollama_url or "127.0.0.1" in ollama_url
+
             self._add_result(
                 "Ollama Connection",
                 False,
-                "No se pudo conectar",
-                f"Error: {e.reason}",
-                "Ejecuta: ollama serve"
+                f"No se pudo conectar a Ollama {'local' if is_local else 'remoto'}",
+                f"URL: {ollama_url}\nError: {e.reason}",
+                "✅ Si usas Ollama LOCAL:\n"
+                "   1. Instala Ollama: https://ollama.com/download\n"
+                "   2. Ejecuta: ollama serve\n"
+                "   3. Descarga modelos: ollama pull llama3:8b\n\n"
+                "☁️  Si prefieres LLMs en la NUBE:\n"
+                "   - OpenAI API: https://platform.openai.com\n"
+                "   - Anthropic Claude: https://anthropic.com\n"
+                "   - Google Gemini: https://ai.google.dev\n"
+                "   (Requiere configurar API keys y modificar DevMind para soportar cloud)"
             )
         except Exception as e:
             self._add_result(
@@ -405,7 +439,7 @@ class SystemDoctor:
                 False,
                 "Error durante verificación",
                 f"{type(e).__name__}: {e}",
-                "Verifica que Ollama esté corriendo en localhost:11434"
+                "Verifica que Ollama esté corriendo en: " + ollama_url
             )
 
     def _check_docker(self) -> None:

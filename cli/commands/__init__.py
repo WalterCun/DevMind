@@ -4,9 +4,11 @@ Comandos CLI de DevMind Core.
 
 Módulo que exporta todos los comandos disponibles en la CLI.
 """
+from .addons import addons_group
 from .code import code_command
 from .doctor import doctor_command
 from .fix import fix_command
+from .tools import tools_group
 from .init import init_command
 from .chat import chat_command
 from .plan import plan_command
@@ -22,4 +24,7 @@ __all__ = [
     "plan_command",
     "code_command",
     "fix_command",
+    "tools_group",
+    "addons_group",
 ]
+
