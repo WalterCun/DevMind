@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Base de Datos Relacional
+  postgres:
+    image: postgres:15-alpine
+    container_name: devmind-db
+    environment:
+      POSTGRES_DB: devmind
+      POSTGRES_USER: devmind
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-devmind123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devmind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Memoria Vectorial
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: devmind-chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  # LLM Local
+  ollama:
+    image: ollama/ollama:latest
+    container_name: devmind-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # Sin GPU, usar CPU mode (más lento)
+
+  # Aplicación Principal
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: devmind-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+      ollama:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://devmind:${DB_PASSWORD:-devmind123}@postgres:5432/devmind
+      CHROMA_URL: http://chromadb:8000
+      OLLAMA_URL: http://ollama:11434
+      DEVMENT_MODE: ${DEVMENT_MODE:-docker}
+    volumes:
+      - ./projects:/app/projects
+      - ./addons:/app/addons
+      - ./tools:/app/tools
+      - devmind_memory:/app/.memory
+    ports:
+      - "8080:8080"
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+  chroma_data:
+  ollama_data:
+  devmind_memory:
