@@ -1,0 +1,22 @@
+{
+  "agent_name": "DevMind Enterprise",
+  "personality": "professional",
+  "communication_style": "detailed",
+  "autonomy_mode": "supervised",
+  "max_file_write_without_confirm": 3,
+  "allow_internet": false,
+  "allow_email": true,
+  "allow_self_improvement": false,
+  "browser_profile": "disabled",
+  "ide_integration": false,
+  "allow_language_learning": false,
+  "preferred_languages": ["python", "java", "typescript", "go"],
+  "learning_mode": "conservative",
+  "documentation_sources": ["official_docs"],
+  "enable_all_agents": true,
+  "priority_agents": ["backend", "security", "qa", "devops"],
+  "audit_frequency": "every_commit",
+  "sandbox_enabled": true,
+  "max_concurrent_agents": 10,
+  "log_level": "DEBUG"
+}

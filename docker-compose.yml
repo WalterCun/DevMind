@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Base de Datos Relacional
+  # Base de Datos Relacional (PostgreSQL)
   postgres:
     image: postgres:15-alpine
     container_name: devmind-db
@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Memoria Vectorial
+  # Memoria Vectorial (ChromaDB)
   chromadb:
     image: chromadb/chroma:latest
     container_name: devmind-chroma
@@ -27,8 +27,13 @@ services:
       - "8000:8000"
     volumes:
       - chroma_data:/chroma/chroma
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # LLM Local
+  # LLM Local (Ollama)
   ollama:
     image: ollama/ollama:latest
     container_name: devmind-ollama
@@ -43,9 +48,9 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    # Sin GPU, usar CPU mode (más lento)
+    # Si no tienes GPU, comenta la sección 'deploy' y usará CPU
 
-  # Aplicación Principal
+  # Aplicación Principal (DevMind Core)
   app:
     build:
       context: .
@@ -55,26 +60,33 @@ services:
       postgres:
         condition: service_healthy
       chromadb:
-        condition: service_started
+        condition: service_healthy
       ollama:
         condition: service_started
     environment:
       DATABASE_URL: postgresql://devmind:${DB_PASSWORD:-devmind123}@postgres:5432/devmind
       CHROMA_URL: http://chromadb:8000
       OLLAMA_URL: http://ollama:11434
-      DEVMENT_MODE: ${DEVMENT_MODE:-docker}
+      DEVMIND_MODE: ${DEVMIND_MODE:-docker}
+      DEVMENT_HOME: /app/.devmind
     volumes:
       - ./projects:/app/projects
       - ./addons:/app/addons
-      - ./tools:/app/tools
+      - ./tools/auto_generated:/app/tools/auto_generated
       - devmind_memory:/app/.memory
     ports:
       - "8080:8080"
     stdin_open: true
     tty: true
+    profiles:
+      - full  # Solo se levanta si se especifica docker-compose --profile full up
 
 volumes:
   postgres_data:
   chroma_data:
   ollama_data:
   devmind_memory:
+
+networks:
+  default:
+    name: devmind-network

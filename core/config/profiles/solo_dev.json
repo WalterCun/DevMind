@@ -1,0 +1,22 @@
+{
+  "agent_name": "DevMate",
+  "personality": "casual",
+  "communication_style": "educational",
+  "autonomy_mode": "semi_autonomous",
+  "max_file_write_without_confirm": 10,
+  "allow_internet": true,
+  "allow_email": false,
+  "allow_self_improvement": true,
+  "browser_profile": "persistent",
+  "ide_integration": true,
+  "allow_language_learning": true,
+  "preferred_languages": ["python", "javascript", "typescript"],
+  "learning_mode": "balanced",
+  "documentation_sources": ["official_docs", "github", "stackoverflow"],
+  "enable_all_agents": true,
+  "priority_agents": ["backend", "frontend", "database"],
+  "audit_frequency": "daily",
+  "sandbox_enabled": true,
+  "max_concurrent_agents": 5,
+  "log_level": "INFO"
+}

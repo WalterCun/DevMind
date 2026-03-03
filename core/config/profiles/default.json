@@ -1,0 +1,22 @@
+{
+  "agent_name": "DevMind",
+  "personality": "professional",
+  "communication_style": "concise",
+  "autonomy_mode": "supervised",
+  "max_file_write_without_confirm": 5,
+  "allow_internet": false,
+  "allow_email": false,
+  "allow_self_improvement": true,
+  "browser_profile": "headless",
+  "ide_integration": false,
+  "allow_language_learning": true,
+  "preferred_languages": ["python"],
+  "learning_mode": "balanced",
+  "documentation_sources": ["official_docs", "github"],
+  "enable_all_agents": true,
+  "priority_agents": [],
+  "audit_frequency": "weekly",
+  "sandbox_enabled": true,
+  "max_concurrent_agents": 3,
+  "log_level": "INFO"
+}
