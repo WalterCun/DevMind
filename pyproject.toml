@@ -1,6 +1,6 @@
 [project]
 name = "devmind"
-version = "0.1.0"
+version = "0.5.0"
 description = "Tu ingeniero de software autónomo, ejecutándose 100% en tu máquina"
 requires-python = ">=3.12"
 license = {text = "MIT"}
