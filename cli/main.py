@@ -9,11 +9,14 @@ import click
 from rich.console import Console
 from rich.panel import Panel
 
-from cli.commands.doctor import doctor_command
 from cli.commands.init import init_command
 from cli.commands.chat import chat_command
 from cli.commands.status import status_command
 from cli.commands.config import config_command
+from cli.commands.doctor import doctor_command
+from cli.commands.plan import plan_command
+from cli.commands.code import code_command
+from cli.commands.fix import fix_command
 
 console = Console()
 
@@ -28,24 +31,40 @@ def main(verbose: bool) -> None:
     Una plataforma de desarrollo auto-alojada que actúa como un equipo
     de ingeniería completo. Planifica, codifica, depura y se auto-mejora.
 
+    \b
+    Comandos principales:
+      init          Configurar agente por primera vez
+      chat          Conversación interactiva con el agente
+      plan          Planificar proyecto en fases
+      code          Generar código con IA
+      fix           Auto-fix de bugs
+      status        Ver estado del sistema
+      config        Modificar configuración
+      doctor        Diagnóstico completo
+
     Ejemplos:
 
-        devmind init              # Configurar por primera vez
-        devmind chat              # Iniciar conversación
-        devmind status            # Ver estado del sistema
-        devmind config --show     # Ver configuración completa
+        devmind init
+        devmind chat "Quiero crear una API para hoteles"
+        devmind plan --project hotel-api "API REST con Django"
+        devmind code -p hotel-api "Modelo Reservation con campos..."
+        devmind fix -p hotel-api "Error 500 al filtrar por fecha"
+        devmind doctor
     """
     if verbose:
         import os
         os.environ['LOG_LEVEL'] = 'DEBUG'
 
 
-# Registrar comandos
+# Registrar todos los comandos
 main.add_command(init_command)
 main.add_command(chat_command)
 main.add_command(status_command)
 main.add_command(config_command)
 main.add_command(doctor_command)
+main.add_command(plan_command)
+main.add_command(code_command)
+main.add_command(fix_command)
 
 if __name__ == '__main__':
     main()

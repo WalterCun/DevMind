@@ -77,33 +77,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-5. Instrucciones para Iniciar
-
-Para validar que la Fase 0 - Sprint 0.1 está completa, ejecuta lo siguiente en tu terminal:
-1. Crea la estructura y archivos:
-Copia el contenido anterior en sus respectivos archivos dentro de la carpeta devmind-core.
-
-2. Prepara el entorno (Nativo):
-
-```bash
-cd devmind-core
-chmod +x install.sh
-./install.sh
-```
-3. O prepara el entorno (Docker):
-
-```
-cd devmind-core
-cp .env.example .env
-docker-compose --profile full up -d
-```
-
-4. Verifica la instalación:
-```
-# Si es nativo (asegúrate de activar el venv primero)
-source ~/.devmind/venv/bin/activate
-devmind --version
-
-# Si es Docker
-docker-compose exec app devmind --version
-```

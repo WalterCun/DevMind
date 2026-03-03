@@ -55,6 +55,7 @@ dev = [
     "mypy>=1.0",
     "pytest-django>=4.12.0",
     "psutil>=7.2.2",
+    "pytest-asyncio>=1.3.0",
 ]
 
 [project.scripts]
@@ -66,3 +67,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["core", "cli", "api", "db"]
+
+[tool.pytest_asyncio]
+asyncio_mode = "auto"
