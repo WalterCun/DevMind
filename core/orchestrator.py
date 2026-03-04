@@ -6,18 +6,17 @@ Coordina agentes, memoria y ejecución para proporcionar
 una experiencia de desarrollo autónoma coherente.
 """
 
-import logging
 import asyncio
-from typing import Dict, Any, Optional, List, Union
+import logging
 from datetime import datetime
-from pathlib import Path
+from typing import Dict, Any, Optional, List
 
-from .config.manager import ConfigManager
+from .agents.base import AgentLevel
 from .agents.registry import AgentRegistry
-from .agents.base import AgentLevel, AgentStatus
-from .memory.vector_store import VectorMemory, MemoryCategory
+from .config.manager import ConfigManager
 from .memory.relational_store import RelationalMemory
-from .utils.helpers import safe_get, parse_json_safe
+from .memory.vector_store import VectorMemory, MemoryCategory
+from .utils.helpers import safe_get
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +98,15 @@ class DevMindOrchestrator:
             self._initialized = True
             logger.info("DevMindOrchestrator fully initialized")
             return True
-
+        except ImportError as e:
+            error_msg = str(e).lower()
+            if "crewai" in error_msg or "llm" in error_msg:
+                logger.error(f"LLM initialization error: {e}")
+                # No fallar completamente, permitir modo limitado
+                logger.warning("Continuing with limited agent functionality")
+                return False
+            else:
+                raise
         except Exception as e:
             logger.error(f"Failed to initialize orchestrator: {e}")
             return False

@@ -86,6 +86,8 @@ def chat_command(
         console.print("[red]❌ Error inicializando el orchestrator[/red]")
         return
 
+
+
     # Si hay mensaje inicial, procesarlo
     if message:
         console.print(f"[bold blue]Tú:[/bold blue] {message}")

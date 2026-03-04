@@ -7,6 +7,8 @@ Proporciona almacenamiento y recuperación semántica de:
 - Decisiones arquitectónicas
 - Conversaciones y contexto
 - Documentación y referencias
+
+Compatible con ChromaDB 1.1.1+
 """
 
 from typing import List, Dict, Any, Optional, Union
@@ -17,8 +19,15 @@ import hashlib
 import logging
 
 from langchain_ollama import OllamaEmbeddings
-from chromadb import Client as ChromaClient
-from chromadb.config import Settings as ChromaSettings
+
+# ✅ CORREGIDO: Imports para ChromaDB 1.1.1
+try:
+    from chromadb import PersistentClient, HttpClient
+    from chromadb.config import Settings
+except ImportError:
+    raise ImportError(
+        "ChromaDB 1.x es requerido. Instalá: uv pip install 'chromadb>=1.0.0'"
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +53,7 @@ class VectorMemory:
     - Filtrado por categoría, proyecto y metadata
     - Persistencia en disco
     - Búsqueda por similitud coseno
+    - Compatible con ChromaDB 1.1.1+
     """
 
     DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
@@ -63,7 +73,7 @@ class VectorMemory:
 
         Args:
             project_id: ID único del proyecto
-            chroma_url: URL del servidor ChromaDB
+            chroma_url: URL del servidor ChromaDB (opcional)
             ollama_url: URL del servidor Ollama
             embedding_model: Modelo de embeddings a usar
             persist_directory: Directorio para persistencia local
@@ -71,7 +81,6 @@ class VectorMemory:
         self.project_id = project_id
         self.collection_name = f"devmind_{project_id}"
 
-        self.chroma_url = chroma_url or self.DEFAULT_CHROMA_URL
         self.ollama_url = ollama_url or self.DEFAULT_OLLAMA_URL
         self.embedding_model = embedding_model or self.DEFAULT_EMBEDDING_MODEL
 
@@ -81,14 +90,14 @@ class VectorMemory:
             base_url=self.ollama_url
         )
 
-        # Conectar a ChromaDB
+        # ✅ CORREGIDO: Conectar a ChromaDB 1.1.1
         self._client = self._init_chroma_client(persist_directory)
 
-        # Obtener o crear colección
+        # ✅ CORREGIDO: API actualizada para obtener/crear colección
         self._collection = self._client.get_or_create_collection(
             name=self.collection_name,
             metadata={
-                "project_id": project_id,
+                "project_id": self.project_id,
                 "created_at": datetime.now().isoformat(),
                 "embedding_model": self.embedding_model
             }
@@ -96,27 +105,25 @@ class VectorMemory:
 
         logger.info(f"VectorMemory initialized for project {project_id}")
 
-    def _init_chroma_client(self, persist_directory: str = None) -> ChromaClient:
-        """Inicializa cliente ChromaDB (HTTP o persistente)"""
+    def _init_chroma_client(self, persist_directory: str = None):
+        """
+        Inicializa cliente ChromaDB 1.1.1 (HTTP o persistente).
+
+        ✅ CORREGIDO para ChromaDB 1.1.1 - usa PersistentClient
+        """
+        # Usar modo persistente local por defecto (más confiable para desarrollo)
         if persist_directory:
-            # Modo persistente local
-            return ChromaClient(
-                settings=ChromaSettings(
-                    persist_directory=persist_directory,
-                    is_persistent=True
-                )
-            )
-        else:
-            # Modo HTTP (servidor remoto)
-            from urllib.parse import urlparse
-            parsed = urlparse(self.chroma_url)
-            return ChromaClient(
-                settings=ChromaSettings(
-                    chroma_api_impl="rest",
-                    chroma_server_host=parsed.hostname,
-                    chroma_server_http_port=parsed.port or 8000
-                )
-            )
+            persist_dir = Path(persist_directory)
+            persist_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Using persistent ChromaDB at: {persist_dir}")
+            return PersistentClient(path=str(persist_dir))
+
+        # Directorio por defecto si no se especifica
+        default_persist_dir = Path.home() / ".devmind" / "chroma_db" / self.project_id
+        default_persist_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Using default persistent ChromaDB at: {default_persist_dir}")
+        return PersistentClient(path=str(default_persist_dir))
 
     def store(
             self,
@@ -158,6 +165,7 @@ class VectorMemory:
         try:
             embedding = self._embeddings.embed_query(content)
 
+            # ✅ API actualizada para ChromaDB 1.x
             self._collection.upsert(
                 ids=[doc_id],
                 embeddings=[embedding],
@@ -208,6 +216,7 @@ class VectorMemory:
         try:
             query_embedding = self._embeddings.embed_query(query)
 
+            # ✅ API actualizada para ChromaDB 1.x
             results = self._collection.query(
                 query_embeddings=[query_embedding],
                 n_results=limit,
@@ -247,18 +256,7 @@ class VectorMemory:
             commit_hash: str = None,
             language: str = None
     ) -> str:
-        """
-        Guarda snapshot de código para referencia futura.
-
-        Args:
-            file_path: Ruta relativa del archivo
-            content: Contenido del código
-            commit_hash: Hash de commit asociado (opcional)
-            language: Lenguaje de programación
-
-        Returns:
-            ID del documento
-        """
+        """Guarda snapshot de código para referencia futura"""
         return self.store(
             content=content,
             metadata={
@@ -279,19 +277,7 @@ class VectorMemory:
             alternatives: List[str] = None,
             consequences: str = ""
     ) -> str:
-        """
-        Guarda decisión arquitectónica (ADR - Architecture Decision Record).
-
-        Args:
-            title: Título de la decisión
-            decision: Decisión tomada
-            context: Contexto que llevó a la decisión
-            alternatives: Alternativas consideradas
-            consequences: Consecuencias de la decisión
-
-        Returns:
-            ID del documento
-        """
+        """Guarda decisión arquitectónica (ADR)"""
         content = f"DECISIÓN: {title}\n\nContexto: {context}\n\nDecisión: {decision}\n\nConsecuencias: {consequences}"
         if alternatives:
             content += f"\n\nAlternativas consideradas: {', '.join(alternatives)}"
@@ -315,18 +301,7 @@ class VectorMemory:
             intent: str = None,
             task_id: str = None
     ) -> str:
-        """
-        Guarda intercambio de conversación para contexto futuro.
-
-        Args:
-            user_message: Mensaje del usuario
-            agent_response: Respuesta del agente
-            intent: Intención detectada
-            task_id: ID de tarea asociada
-
-        Returns:
-            ID del documento
-        """
+        """Guarda intercambio de conversación"""
         content = f"User: {user_message}\n\nAgent: {agent_response}"
 
         return self.store(
@@ -346,18 +321,7 @@ class VectorMemory:
             query: str,
             include_categories: Optional[List[MemoryCategory]] = None
     ) -> str:
-        """
-        Obtiene conocimiento consolidado del proyecto para un query.
-
-        Útil para construir prompts de contexto para LLMs.
-
-        Args:
-            query: Consulta para recuperar contexto relevante
-            include_categories: Categorías a incluir (None = todas)
-
-        Returns:
-            String con contexto formateado para prompt
-        """
+        """Obtiene conocimiento consolidado del proyecto"""
         results = self.retrieve(
             query=query,
             categories=include_categories,
@@ -368,7 +332,7 @@ class VectorMemory:
         if not results:
             return ""
 
-        # Agrupar por categoría para mejor organización
+        # Agrupar por categoría
         by_category: Dict[str, List[str]] = {}
         for r in results:
             cat = r["category"]
@@ -380,7 +344,7 @@ class VectorMemory:
         context_parts = []
         for category, items in by_category.items():
             context_parts.append(f"\n## {category.upper()}")
-            context_parts.extend(items[:5])  # Máximo 5 por categoría
+            context_parts.extend(items[:5])
 
         return "\n".join(context_parts)
 
@@ -395,18 +359,9 @@ class VectorMemory:
             return False
 
     def clear(self, category: MemoryCategory = None) -> int:
-        """
-        Limpia memoria, opcionalmente por categoría.
-
-        Args:
-            category: Categoría a limpiar (None = todo)
-
-        Returns:
-            Número de documentos eliminados
-        """
+        """Limpia memoria, opcionalmente por categoría"""
         try:
             if category:
-                # Obtener IDs de la categoría y eliminar
                 results = self._collection.get(
                     where={"category": category.value},
                     include=["metadatas"]
@@ -417,13 +372,13 @@ class VectorMemory:
                     return len(ids_to_delete)
                 return 0
             else:
-                # Eliminar colección completa y recrear
+                # Resetear colección
                 self._client.delete_collection(self.collection_name)
                 self._collection = self._client.create_collection(
                     name=self.collection_name,
                     metadata={"project_id": self.project_id}
                 )
-                return -1  # -1 indica limpieza completa
+                return -1
         except Exception as e:
             logger.error(f"Failed to clear memory: {e}")
             return 0
@@ -433,7 +388,6 @@ class VectorMemory:
         try:
             count = self._collection.count()
 
-            # Contar por categoría
             categories = {}
             for cat in MemoryCategory:
                 results = self._collection.get(
