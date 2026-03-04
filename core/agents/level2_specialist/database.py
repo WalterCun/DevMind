@@ -31,7 +31,7 @@ class DatabaseSpecialistAgent(BaseAgent):
         """
         super().__init__(
             name="Database Specialist",
-            role="Especialista en Bases de Datos",
+            role="Database Specialist",
             goal="Diseñar esquemas eficientes, optimizar queries y gestionar migraciones de bases de datos",
             backstory="""Eres un DBA/Ingeniero de Datos experto en PostgreSQL, MySQL, MongoDB
             y optimización de bases de datos. Tu enfoque es pragmático: priorizas integridad,

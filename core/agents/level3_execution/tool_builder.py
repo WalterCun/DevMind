@@ -31,7 +31,7 @@ class ToolBuilderAgent(BaseAgent):
         """
         super().__init__(
             name="Tool Builder",
-            role="Creador de Herramientas",
+            role="Tool Builder",
             goal="Crear herramientas CLI y APIs útiles que automaticen tareas repetitivas y mejoren la productividad",
             backstory="""Eres un desarrollador experto en crear herramientas de productividad.
             Tus herramientas son fáciles de usar, bien documentadas y resuelven

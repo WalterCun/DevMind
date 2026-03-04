@@ -31,7 +31,7 @@ class SecuritySpecialistAgent(BaseAgent):
         """
         super().__init__(
             name="Security Specialist",
-            role="Especialista en Seguridad Aplicada",
+            role="Security Specialist",
             goal="Implementar autenticación segura, proteger datos y auditar vulnerabilidades de seguridad",
             backstory="""Eres un especialista en Seguridad experto en OWASP Top 10, criptografía
             y hardening de sistemas. Tu enfoque es defensa en profundidad: múltiples capas

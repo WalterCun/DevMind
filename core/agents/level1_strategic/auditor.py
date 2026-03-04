@@ -31,7 +31,7 @@ class AuditorAgent(BaseAgent):
         """
         super().__init__(
             name="Security Auditor",
-            role="Auditor de Seguridad y Calidad de Código",
+            role="Security Auditor",
             goal="Revisar código, detectar vulnerabilidades y asegurar cumplimiento de estándares de calidad",
             backstory="""Eres un Auditor de Seguridad Senior con experiencia en revisión de código,
             análisis estático y detección de vulnerabilidades. Tu enfoque es meticuloso:

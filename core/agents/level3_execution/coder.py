@@ -31,7 +31,7 @@ class CoderAgent(BaseAgent):
         """
         super().__init__(
             name="Coder Agent",
-            role="Generador de Código",
+            role="Coder Agent",
             goal="Escribir código limpio, funcional, testeable y bien documentado según especificaciones",
             backstory="""Eres un desarrollador experto en múltiples lenguajes de programación.
             Tu código sigue principios SOLID, es legible, mantenible y eficiente.
@@ -83,8 +83,76 @@ class CoderAgent(BaseAgent):
             return "implement"
         return "general"
 
+    def _check_file_state(self, file_path: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Verifica el estado actual de un archivo antes de modificarlo.
+
+        Args:
+            file_path: Ruta del archivo a verificar
+            context: Contexto con información del proyecto
+
+        Returns:
+            Dict con estado del archivo o indicación de que no existe
+        """
+        import os
+        from pathlib import Path
+
+        # Si sandbox está habilitado, verificar en sandbox
+        if context.get("sandbox_enabled", True):
+            sandbox_root = context.get("sandbox_root", "./sandbox")
+            full_path = Path(sandbox_root) / file_path
+        else:
+            full_path = Path(file_path)
+
+        if not full_path.exists():
+            return {
+                "exists": False,
+                "message": f"El archivo {file_path} no existe. ¿Deseas crearlo?",
+                "action_required": "confirm_create"
+            }
+
+        # Leer contenido actual
+        try:
+            with open(full_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            return {
+                "exists": True,
+                "size": len(content),
+                "lines": content.count('\n') + 1,
+                "last_modified": os.path.getmtime(full_path),
+                "preview": content[:500] + ("..." if len(content) > 500 else ""),
+                "message": f"El archivo {file_path} existe ({os.path.getsize(full_path)} bytes). ¿Deseas modificarlo?",
+                "action_required": "confirm_modify"
+            }
+        except Exception as e:
+            return {
+                "exists": True,
+                "error": str(e),
+                "message": f"No se pudo leer {file_path}: {e}",
+                "action_required": "error"}
+
     def _create_code(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Crea código nuevo"""
+        file_path = context.get("file_path")
+        if file_path:
+            file_state = self._check_file_state(file_path, context)
+
+            # Si requiere confirmación, retornar solicitud al usuario
+            if file_state.get("action_required") in ["confirm_create", "confirm_modify"]:
+                return {
+                    "content": file_state["message"],
+                    "file_state": file_state,
+                    "requires_confirmation": True,
+                    "success": True
+                }
+            elif file_state.get("action_required") == "error":
+                return {
+                    "content": f"⚠️ {file_state['message']}",
+                    "error": file_state.get("error"),
+                    "success": False
+                }
+
         language = context.get("language", "python")
         framework = context.get("framework", "")
 

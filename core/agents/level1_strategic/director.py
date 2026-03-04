@@ -9,7 +9,7 @@ class DirectorAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(
             name="Project Director",
-            role="Director de Proyecto de Software",
+            role="Project Director",
             goal="Planificar, estimar y coordinar el desarrollo de proyectos de software",
             backstory="""Eres un Director de Proyecto experimentado con 15+ años en la industria.
             Tu especialidad es transformar ideas vagas en planes de ejecución claros y realistas.

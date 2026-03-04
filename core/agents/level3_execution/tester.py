@@ -31,7 +31,7 @@ class TesterAgent(BaseAgent):
         """
         super().__init__(
             name="Tester Agent",
-            role="Creador de Tests",
+            role="Tester Agent",
             goal="Escribir tests efectivos que validen funcionalidad y prevengan regresiones",
             backstory="""Eres un ingeniero de testing experto en pytest, unittest y frameworks modernos.
             Tu enfoque es TDD: tests primero. Escribes tests legibles, aislados,

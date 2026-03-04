@@ -32,7 +32,7 @@ class ArchitectAgent(BaseAgent):
         """
         super().__init__(
             name="Architect Principal",
-            role="Arquitecto Principal de Software",
+            role="Architect Principal",
             goal="Diseñar arquitecturas escalables, evaluar tecnologías y documentar decisiones técnicas fundamentales",
             backstory="""Eres un Arquitecto de Software Senior con 20+ años de experiencia 
             diseñando sistemas distribuidos, microservicios y aplicaciones enterprise.

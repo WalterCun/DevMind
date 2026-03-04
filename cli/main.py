@@ -5,6 +5,7 @@ Entry point principal de DevMind Core CLI.
 Punto de entrada para todos los comandos de la interfaz de línea de comandos.
 """
 import logging
+import os
 from pathlib import Path
 
 import click
@@ -22,7 +23,12 @@ from cli.commands.plan import plan_command
 from cli.commands.status import status_command
 from core.utils.logger import setup_logging
 
-setup_logging(level="DEBUG", log_file="~/.devmind/devmind.log")
+setup_logging(
+    level=os.getenv("LOG_LEVEL", "WARNING"),  # ← WARNING para producción
+    log_file=os.getenv("LOG_FILE", "~/.devmind/devmind.log"),
+    console_output=os.getenv("LOG_CONSOLE", "False").lower() == "true"
+)
+
 logger = logging.getLogger(__name__)
 
 env_path = Path(__file__).parent.parent.parent / '.env'
@@ -34,9 +40,10 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="devmind")
+@click.version_option(version="0.6.0", prog_name="devmind")
 @click.option('--verbose', '-v', is_flag=True, help='Modo verbose')
-def main(verbose: bool) -> None:
+@click.option('--production', '-p', is_flag=True, help='Modo producción')
+def main(verbose: bool, production: bool) -> None:
     """
     🤖 DevMind Core - Tu ingeniero de software autónomo
 
@@ -64,8 +71,12 @@ def main(verbose: bool) -> None:
         devmind doctor
     """
     if verbose:
-        import os
         os.environ['LOG_LEVEL'] = 'DEBUG'
+        os.environ['LOG_CONSOLE'] = 'True'
+
+    if production:
+        os.environ['LOG_LEVEL'] = 'WARNING'
+        os.environ['LOG_CONSOLE'] = 'False'
 
 
 # Registrar todos los comandos

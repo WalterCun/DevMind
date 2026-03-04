@@ -31,7 +31,7 @@ class DocumenterAgent(BaseAgent):
         """
         super().__init__(
             name="Documenter Agent",
-            role="Generador de Documentación",
+            role="Documenter Agent",
             goal="Crear documentación clara, completa y mantenible para código y proyectos",
             backstory="""Eres un technical writer experto en documentación de software.
             Tu documentación es clara, concisa y útil para desarrolladores.

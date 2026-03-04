@@ -11,8 +11,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
-from .agents.base import AgentLevel
-from .agents.registry import AgentRegistry
+from .agents.registry import AgentRegistry, AGENT_MODULE_MAP
 from .config.manager import ConfigManager
 from .memory.relational_store import RelationalMemory
 from .memory.vector_store import VectorMemory, MemoryCategory
@@ -115,7 +114,8 @@ class DevMindOrchestrator:
             self,
             message: str,
             session_id: str = None,
-            metadata: Dict[str, Any] = None
+            metadata: Dict[str, Any] = None,
+            output_json: bool = False
     ) -> Dict[str, Any]:
         """
         Procesa un mensaje del usuario y retorna respuesta del agente.
@@ -158,9 +158,10 @@ class DevMindOrchestrator:
         self._store_interaction(message, result, intent, session)
 
         # Formatear respuesta para el usuario
-        return self._format_response(result, intent)
+        return self._format_response(result, intent, output_json)
 
-    def _classify_intent(self, message: str) -> str:
+    @staticmethod
+    def _classify_intent(message: str) -> str:
         """
         Clasifica la intención del mensaje del usuario.
 
@@ -217,7 +218,8 @@ class DevMindOrchestrator:
 
         return context
 
-    def _get_relevant_categories(self, intent: str) -> Optional[List[MemoryCategory]]:
+    @staticmethod
+    def _get_relevant_categories(intent: str) -> Optional[List[MemoryCategory]]:
         """Mapea intención a categorías de memoria relevantes"""
         mapping = {
             "code": [MemoryCategory.CODE, MemoryCategory.DECISIONS, MemoryCategory.TOOLS],
@@ -230,29 +232,30 @@ class DevMindOrchestrator:
         return mapping.get(intent)
 
     def _select_agents(self, intent: str, context: Dict) -> List[Any]:
-        """Selecciona agentes apropiados para la intención"""
-        # Mapeo simplificado de intención a rol de agente
-        role_mapping = {
-            "plan": "Project Director",
-            "code": "Backend Specialist",  # Podría ser dinámico según stack
-            "fix": "QA Specialist",
-            "explain": "Architect Principal",
-            "stack": "Architect Principal",
-            "connect": "DevOps Specialist",
-            "general": "Project Director",
-        }
+        """Selecciona agentes apropiados para la intención con carga dinámica"""
 
-        role = role_mapping.get(intent, "Project Director")
-        agent = self.agent_registry.get_agent_by_role(role)
+        # ✅ Cargar agentes bajo demanda según intención
+        agents = self.agent_registry.get_agents_for_intent(intent, self.config)
 
+        if agents:
+            logger.debug(f"Selected {len(agents)} agents for intent '{intent}'")
+            return agents
+
+        # Fallback: usar Project Director (siempre cargado)
+        agent = self.agent_registry.get_agent_by_role("Project Director")
         if agent:
             return [agent]
 
-        # Fallback: usar cualquier agente disponible del nivel apropiado
-        fallback_level = AgentLevel.STRATEGIC if intent in ["plan", "stack"] else AgentLevel.SPECIALIST
-        available = self.agent_registry.get_agents_by_level(fallback_level)
+        logger.warning(f"No agents available for intent: {intent}")
+        return []
 
-        return available[:1] if available else []
+    def get_agent_status(self) -> Dict[str, Any]:
+        """Obtiene estado de agentes cargados"""
+        return {
+            "loaded_agents": self.agent_registry.get_loaded_agents_summary(),
+            "available_agents": len(AGENT_MODULE_MAP),
+            "load_on_demand": True
+        }
 
     async def _execute_task(
             self,
@@ -304,7 +307,8 @@ class DevMindOrchestrator:
             "combined": self._combine_results(results)
         }
 
-    def _combine_results(self, results: List[Dict]) -> Dict[str, Any]:
+    @staticmethod
+    def _combine_results(results: List[Dict]) -> Dict[str, Any]:
         """Combina resultados de múltiples agentes"""
         combined = {"content": [], "files": [], "suggestions": []}
 
@@ -363,41 +367,39 @@ class DevMindOrchestrator:
             except Exception as e:
                 logger.debug(f"Skipping relational storage (fallback session): {e}")
 
-    def _format_response(self, result: Dict, intent: str) -> Dict[str, Any]:
+    @staticmethod
+    def _format_response(result: Dict, intent: str, output_json: bool = False) -> Dict[str, Any]:
         """Formatea resultado para respuesta al usuario"""
-        # Extraer contenido principal con múltiples fallbacks
-        content = None
 
-        # Intentar extraer de diferentes estructuras de resultado
-        if isinstance(result, dict):
-            content = (
-                    result.get("content") or
-                    result.get("response") or
-                    result.get("answer") or
-                    (result.get("result") if isinstance(result.get("result"), str) else None) or
-                    (result.get("result", {}).get("content") if isinstance(result.get("result"), dict) else None)
-            )
+        # Extraer contenido principal
+        content = result.get("content") or result.get("combined", {}).get("content", "")
 
-        # Si content sigue siendo None, convertir el resultado completo a string
-        if not content:
-            content = str(result)
+        # Si el resultado es un dict con estructura conocida, extraer campos
+        if isinstance(result.get("result"), dict):
+            r = result["result"]
+            content = r.get("content") or r.get("response") or r.get("answer") or content
 
-        # Limpiar contenido vacío
-        if not content or content.strip() == "":
-            content = "⚠️ No se generó una respuesta válida. Por favor, intenta de nuevo."
+        # ✅ Si output_json es True, retornar estructura completa
+        if output_json:
+            return {
+                "response": result,  # Retornar todo el resultado raw
+                "intent": intent,
+                "format": "json",
+                **result
+            }
 
+        # ✅ Formato natural por defecto
         return {
-            "response": content.strip(),
+            "response": content,
             "intent": intent,
-            "files_modified": result.get("files") or result.get("combined", {}).get("files", []) if isinstance(result,
-                                                                                                               dict) else [],
-            "suggestions": result.get("suggestions") or result.get("combined", {}).get("suggestions", []) if isinstance(
-                result, dict) else [],
+            "format": "natural",
+            "files_modified": result.get("files") or result.get("combined", {}).get("files", []),
+            "suggestions": result.get("suggestions") or result.get("combined", {}).get("suggestions", []),
             "agent_info": {
                 "name": result.get("agent"),
                 "execution_time": result.get("execution_time")
-            } if isinstance(result, dict) and result.get("success") else None,
-            "error": result.get("error") if isinstance(result, dict) and not result.get("success") else None
+            } if result.get("success") else None,
+            "error": result.get("error") if not result.get("success") else None
         }
 
     def _get_or_create_session(self, session_id: str, message: str) -> Any:

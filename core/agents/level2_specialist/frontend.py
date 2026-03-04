@@ -31,7 +31,7 @@ class FrontendSpecialistAgent(BaseAgent):
         """
         super().__init__(
             name="Frontend Specialist",
-            role="Especialista en Desarrollo Frontend",
+            role="Frontend Specialist",
             goal="Crear interfaces de usuario modernas, responsivas, accesibles y de alto rendimiento",
             backstory="""Eres un desarrollador Frontend Senior con expertise en React, Vue y Angular.
             Tu pasión es crear experiencias de usuario excepcionales. Priorizas componentes

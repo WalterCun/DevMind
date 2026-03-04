@@ -31,7 +31,7 @@ class BackendSpecialistAgent(BaseAgent):
         """
         super().__init__(
             name="Backend Specialist",
-            role="Especialista en Desarrollo Backend",
+            role="Backend Specialist",
             goal="Diseñar APIs robustas, lógica de negocio escalable y arquitecturas backend seguras",
             backstory="""Eres un desarrollador Backend Senior experto en APIs REST/GraphQL,
             patrones de diseño, microservicios y bases de datos relacionales/no-relacionales.

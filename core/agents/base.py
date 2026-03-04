@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 
 from core.agents.llm_wrapper import CrewLLMWrapper
 
-# ✅ CrewAI 1.9.3 compatible imports
+
 try:
     from crewai import Agent as CrewAIAgent, LLM as CrewLLM
 
@@ -38,8 +38,8 @@ class AgentStatus(Enum):
 
 
 class BaseAgent(ABC):
-    DEFAULT_OLLAMA_HOST = "http://localhost:11434"
-    DEFAULT_MODEL = "qwen3-coder:480b-cloud"
+    DEFAULT_OLLAMA_HOST = os.getenv("OLLAMA_URL")
+    DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 
     def __init__(self, name: str, role: str, goal: str, backstory: str,
                  level: AgentLevel, model: str = DEFAULT_MODEL,
@@ -71,23 +71,27 @@ class BaseAgent(ABC):
             return self._create_mock_llm()
 
         try:
-            logger.debug(f"Creating CrewLLM with model: {self.model}, provider: ollama")
+            logger.info(f"Creating CrewLLM with model: {self.model}, provider: ollama")
 
-            llm = CrewLLM(
+            # Crear CrewLLM nativo
+            crew_llm = CrewLLM(
                 model=self.model,
                 base_url=self.ollama_host,
                 api_base=self.ollama_host,
-                provider="ollama",
+                provider="ollama",  # ← Evita fallback a OpenAI
                 temperature=self.temperature,
                 timeout=60,
                 max_tokens=4096
             )
 
-            logger.debug("✅ CrewLLM initialized")  # ← Cambiar a DEBUG
-            return CrewLLMWrapper(llm)
+            # ✅ WRAP con interfaz LangChain-compatible
+            wrapped_llm = CrewLLMWrapper(crew_llm)
+
+            logger.info("✅ CrewLLM wrapped with LangChain-compatible interface")
+            return wrapped_llm  # ← Retornar el wrapper, NO el CrewLLM nativo
 
         except Exception as e:
-            logger.debug(f"Fallback to mock LLM: {e}")
+            logger.error(f"❌ Failed to initialize CrewLLM: {type(e).__name__}: {e}")
             return self._create_mock_llm()
 
     @staticmethod

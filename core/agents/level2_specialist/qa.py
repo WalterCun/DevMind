@@ -31,7 +31,7 @@ class QASpecialistAgent(BaseAgent):
         """
         super().__init__(
             name="QA Specialist",
-            role="Especialista en Testing y Calidad",
+            role="QA Specialist",
             goal="Escribir tests efectivos, asegurar coverage y automatizar procesos de QA",
             backstory="""Eres un ingeniero de QA experto en testing unitario, de integración y e2e.
             Tu filosofía es TDD: tests primero, código después. Priorizas tests legibles,
