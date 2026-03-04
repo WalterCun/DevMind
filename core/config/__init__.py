@@ -5,8 +5,8 @@ Módulo de configuración de DevMind Core.
 Gestiona la identidad, capacidades y preferencias del agente autónomo.
 """
 
-from .schema import AgentConfig, PersonalityType, AutonomyMode, LearningMode, AuditFrequency
 from .manager import ConfigManager
+from .schema import AgentConfig, PersonalityType, AutonomyMode, LearningMode, AuditFrequency
 from .wizard import OnboardingWizard
 
 __all__ = [

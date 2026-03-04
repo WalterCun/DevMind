@@ -7,19 +7,18 @@ con validación y tests incluidos.
 """
 
 import asyncio
+
 import click
-from pathlib import Path
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.prompt import Confirm
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import Confirm
+from rich.syntax import Syntax
 
+from cli.context import ContextManager
 from core.config.manager import ConfigManager
 from core.orchestrator import DevMindOrchestrator
-from cli.context import ContextManager
-from cli.streaming import stream_agent_response
 
 console = Console()
 
@@ -202,7 +201,6 @@ def _process_code_result(
         sandbox_enabled: bool
 ) -> None:
     """Procesa el resultado de la generación de código"""
-    import re
 
     response = result.get('response', '')
     files_modified = result.get('files_modified', [])

@@ -9,16 +9,16 @@ Registra y audita todas las acciones del agente para:
 - Forense post-ejecución
 """
 
+import hashlib
 import json
 import logging
-import hashlib
-from dataclasses import dataclass, field, asdict
+import threading
+from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Callable
-from collections import defaultdict
-import threading
 
 logger = logging.getLogger(__name__)
 

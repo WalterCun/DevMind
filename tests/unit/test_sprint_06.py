@@ -5,7 +5,6 @@ Tests unitarios para el Sprint 0.6: Auto-Mejora + Herramientas.
 
 # Mock para evitar requerir API keys en tests
 import os
-from unittest.mock import Mock
 
 import pytest
 

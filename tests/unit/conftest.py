@@ -6,9 +6,10 @@ Este archivo se carga automáticamente por pytest y proporciona
 fixtures reutilizables para todos los tests del proyecto.
 """
 
+from typing import Any
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch
-from typing import Optional, Dict, Any
 
 from core.agents.base import AgentLevel, AgentStatus
 

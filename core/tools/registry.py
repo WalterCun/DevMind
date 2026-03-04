@@ -8,12 +8,11 @@ de forma dinámica.
 
 import importlib
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Type, Any
 from datetime import datetime
-import json
+from pathlib import Path
+from typing import Dict, List, Optional, Any
 
-from .base import BaseTool, ToolDefinition, ToolResult
+from .base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
 

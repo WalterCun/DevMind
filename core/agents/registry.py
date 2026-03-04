@@ -1,37 +1,31 @@
 # devmind-core/core/agents/registry.py
 """
 Registro y gestión de agentes para DevMind Core.
-
 Proporciona un sistema centralizado para registrar,
 buscar y orquestar agentes especializados.
 """
-
 from typing import Dict, List, Optional, Type, Any
 from enum import Enum
 import logging
+import os
 from datetime import datetime
-
 from .base import BaseAgent, AgentLevel, AgentStatus
 
 logger = logging.getLogger(__name__)
+
+# ✅ Obtener modelo de LLM desde variable de entorno
+DEFAULT_LLM_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 
 
 class AgentRegistry:
     """
     Registro centralizado de agentes con soporte jerárquico.
-
-    Características:
-    - Singleton para acceso global consistente
-    - Registro por ID, rol y nivel
-    - Inicialización dinámica según configuración
-    - Estado y métricas por agente
-    - Soporte para agentes personalizados
     """
 
     _instance: Optional['AgentRegistry'] = None
     _agents: Dict[str, BaseAgent]
-    _by_role: Dict[str, str]  # role_name -> agent_id
-    _by_level: Dict[AgentLevel, List[str]]  # level -> list of agent_ids
+    _by_role: Dict[str, str]
+    _by_level: Dict[AgentLevel, List[str]]
 
     def __new__(cls) -> 'AgentRegistry':
         """Implementa patrón Singleton"""
@@ -44,12 +38,7 @@ class AgentRegistry:
         return cls._instance
 
     def initialize(self, config: Any) -> None:
-        """
-        Inicializa todos los agentes según configuración.
-
-        Args:
-            config: Configuración del agente (AgentConfig)
-        """
+        """Inicializa todos los agentes según configuración"""
         if self._initialized:
             logger.debug("AgentRegistry already initialized")
             return
@@ -83,19 +72,13 @@ class AgentRegistry:
         from .level1_strategic.architect import ArchitectAgent
         from .level1_strategic.auditor import AuditorAgent
 
+        # ✅ USAR VARIABLE DE ENTORNO para modelo
+        llm_model = os.getenv("OLLAMA_MODEL", DEFAULT_LLM_MODEL)
+
         agents = [
-            DirectorAgent(
-                model=config.preferred_languages[0] if config.preferred_languages else "llama3",
-                temperature=0.3  # Más determinista para decisiones
-            ),
-            ArchitectAgent(
-                model=config.preferred_languages[0] if config.preferred_languages else "llama3",
-                temperature=0.4
-            ),
-            AuditorAgent(
-                model=config.preferred_languages[0] if config.preferred_languages else "llama3",
-                temperature=0.2  # Muy conservador para auditoría
-            )
+            DirectorAgent(model=llm_model, temperature=0.3),
+            ArchitectAgent(model=llm_model, temperature=0.4),
+            AuditorAgent(model=llm_model, temperature=0.2)
         ]
 
         for agent in agents:
@@ -110,13 +93,15 @@ class AgentRegistry:
         from .level2_specialist.security import SecuritySpecialistAgent
         from .level2_specialist.qa import QASpecialistAgent
 
+        llm_model = os.getenv("OLLAMA_MODEL", DEFAULT_LLM_MODEL)
+
         agents = [
-            BackendSpecialistAgent(model="codellama"),
-            FrontendSpecialistAgent(model="codellama"),
-            DatabaseSpecialistAgent(model="codellama"),
-            DevOpsSpecialistAgent(model="codellama"),
-            SecuritySpecialistAgent(model="codellama"),
-            QASpecialistAgent(model="codellama"),
+            BackendSpecialistAgent(model=llm_model),
+            FrontendSpecialistAgent(model=llm_model),
+            DatabaseSpecialistAgent(model=llm_model),
+            DevOpsSpecialistAgent(model=llm_model),
+            SecuritySpecialistAgent(model=llm_model),
+            QASpecialistAgent(model=llm_model),
         ]
 
         for agent in agents:
@@ -137,6 +122,9 @@ class AgentRegistry:
             "qa": ("level2_specialist.qa", "QASpecialistAgent"),
         }
 
+        # ✅ USAR VARIABLE DE ENTORNO para modelo
+        llm_model = os.getenv("OLLAMA_MODEL", DEFAULT_LLM_MODEL)
+
         for priority in priority_agents:
             if priority in specialist_map:
                 module_path, class_name = specialist_map[priority]
@@ -144,7 +132,7 @@ class AgentRegistry:
                     import importlib
                     module = importlib.import_module(f"core.agents.{module_path}")
                     agent_class = getattr(module, class_name)
-                    agent = agent_class(model="codellama")
+                    agent = agent_class(model=llm_model)  # ← Usar variable de entorno
                     self.register(agent)
                     logger.debug(f"Registered priority specialist: {priority}")
                 except (ImportError, AttributeError) as e:
@@ -157,26 +145,22 @@ class AgentRegistry:
         from .level3_execution.documenter import DocumenterAgent
         from .level3_execution.tool_builder import ToolBuilderAgent
 
+        llm_model = os.getenv("OLLAMA_MODEL", DEFAULT_LLM_MODEL)
+
         agents = [
-            CoderAgent(model="codellama"),
-            TesterAgent(model="codellama"),
-            DocumenterAgent(model="llama3"),
-            ToolBuilderAgent(model="codellama"),
+            CoderAgent(model=llm_model),
+            TesterAgent(model=llm_model),
+            DocumenterAgent(model=llm_model),
+            ToolBuilderAgent(model=llm_model),
         ]
 
         for agent in agents:
             self.register(agent)
 
+    # ... [resto de los métodos register, unregister, get_agent, etc. se mantienen igual] ...
+
     def register(self, agent: BaseAgent) -> str:
-        """
-        Registra un agente en el sistema.
-
-        Args:
-            agent: Instancia de BaseAgent a registrar
-
-        Returns:
-            ID del agente registrado
-        """
+        """Registra un agente en el sistema"""
         if agent.id in self._agents:
             logger.warning(f"Agent {agent.id} already registered")
             return agent.id
@@ -194,8 +178,6 @@ class AgentRegistry:
             return False
 
         agent = self._agents[agent_id]
-
-        # Limpiar índices
         self._by_role.pop(agent.role.lower(), None)
         if agent_id in self._by_level[agent.level]:
             self._by_level[agent.level].remove(agent_id)
@@ -241,17 +223,7 @@ class AgentRegistry:
             task: str,
             context: Dict[str, Any] = None
     ) -> Optional[Dict[str, Any]]:
-        """
-        Asigna y ejecuta una tarea en el agente con rol específico.
-
-        Args:
-            role: Rol del agente que debe ejecutar la tarea
-            task: Descripción de la tarea
-            context: Contexto adicional para la ejecución
-
-        Returns:
-            Resultado de la ejecución o None si no hay agente disponible
-        """
+        """Asigna y ejecuta una tarea en el agente con rol específico"""
         agent = self.get_agent_by_role(role)
         if not agent:
             logger.warning(f"No agent found for role: {role}")
@@ -259,7 +231,6 @@ class AgentRegistry:
 
         if agent.status == AgentStatus.WORKING:
             logger.debug(f"Agent {agent.name} is busy, waiting...")
-            # En una implementación real, aquí iría lógica de cola/espera
 
         try:
             result = agent.execute(task, context)
@@ -294,18 +265,7 @@ class AgentRegistry:
             agent_class: Type[BaseAgent],
             **init_kwargs
     ) -> str:
-        """
-        Registra un agente personalizado definido por el usuario.
-
-        Útil para addons que extienden capacidades del sistema.
-
-        Args:
-            agent_class: Clase que hereda de BaseAgent
-            **init_kwargs: Argumentos para inicializar el agente
-
-        Returns:
-            ID del agente registrado
-        """
+        """Registra un agente personalizado definido por el usuario"""
         try:
             agent = agent_class(**init_kwargs)
             return self.register(agent)
@@ -318,7 +278,6 @@ class AgentRegistry:
         results = {}
         for agent_id, agent in self._agents.items():
             try:
-                # Verificar que el agente responde
                 status = agent.get_status()
                 results[agent_id] = {
                     "healthy": True,

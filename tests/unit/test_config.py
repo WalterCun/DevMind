@@ -4,20 +4,15 @@ Tests unitarios para el módulo de configuración.
 """
 
 import pytest
-import json
-from pathlib import Path
-from datetime import datetime
 
+from core.config.manager import ConfigManager
 from core.config.schema import (
     AgentConfig,
     PersonalityType,
     AutonomyMode,
-    LearningMode,
-    AuditFrequency,
     EmailConfig,
     GitConfig,
 )
-from core.config.manager import ConfigManager
 
 
 class TestAgentConfig:

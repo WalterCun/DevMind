@@ -9,7 +9,8 @@ Responsable de:
 - Validar calidad
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
+
 from ..base import BaseAgent, AgentLevel, AgentStatus
 
 

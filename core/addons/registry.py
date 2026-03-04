@@ -7,13 +7,13 @@ addons de forma dinámica.
 """
 
 import importlib
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Type, Any
-from datetime import datetime
 import json
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Any
 
-from .base import BaseAddon, AddonManifest
+from .base import BaseAddon
 
 logger = logging.getLogger(__name__)
 

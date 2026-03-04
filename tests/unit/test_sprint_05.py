@@ -4,7 +4,6 @@ Tests unitarios para el Sprint 0.5: Sandbox + Ejecución Segura.
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 
 class TestPermissionSystem:

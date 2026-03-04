@@ -1,53 +1,36 @@
 # devmind-core/core/agents/base.py
-"""
-Clase base para todos los agentes de DevMind Core.
-
-Compatible con:
-- CrewAI 1.9.3+
-- langchain-ollama 1.0.1+
-- Ollama local por defecto
-"""
-
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
-from enum import Enum
-import uuid
-from datetime import datetime
-import logging
+"""Base agent compatible with CrewAI 1.9.3+"""
 import json
+import logging
+import os
 import re
+import uuid
+from abc import ABC, abstractmethod
+from datetime import datetime
+from enum import Enum
+from typing import Dict, Any, Optional
 
-# ✅ CORREGIDO: Imports condicionales para CrewAI 1.9.3
+from core.agents.llm_wrapper import CrewLLMWrapper
+
+# ✅ CrewAI 1.9.3 compatible imports
 try:
     from crewai import Agent as CrewAIAgent, LLM as CrewLLM
 
     _HAS_CREWAI = True
 except ImportError:
     _HAS_CREWAI = False
-    CrewAIAgent = None
-    CrewLLM = None
-
-try:
-    from langchain_ollama import ChatOllama, OllamaEmbeddings
-
-    _HAS_LANGCHAIN_OLLAMA = True
-except ImportError:
-    _HAS_LANGCHAIN_OLLAMA = False
-    ChatOllama = None
-    OllamaEmbeddings = None
+    CrewAIAgent = CrewLLM = None
 
 logger = logging.getLogger(__name__)
 
 
 class AgentLevel(Enum):
-    """Niveles jerárquicos de agentes"""
-    STRATEGIC = 1  # Nivel 1: Director, Arquitecto, Auditor
-    SPECIALIST = 2  # Nivel 2: Backend, Frontend, DB, DevOps, etc.
-    EXECUTION = 3  # Nivel 3: Coder, Tester, Documenter, ToolBuilder
+    STRATEGIC = 1
+    SPECIALIST = 2
+    EXECUTION = 3
 
 
 class AgentStatus(Enum):
-    """Estados posibles del agente"""
     IDLE = "idle"
     WORKING = "working"
     WAITING = "waiting"
@@ -55,214 +38,115 @@ class AgentStatus(Enum):
 
 
 class BaseAgent(ABC):
-    """
-    Clase base para todos los agentes de DevMind Core.
-
-    Características:
-    - Identidad y metadata del agente
-    - Integración con LLM (Ollama por defecto, CrewAI 1.9.3 compatible)
-    - Gestión de estado y estadísticas
-    - Ejecución de tareas con contexto
-    """
-
     DEFAULT_OLLAMA_HOST = "http://localhost:11434"
-    DEFAULT_MODEL = "llama3"
+    DEFAULT_MODEL = "qwen3-coder:480b-cloud"
 
-    def __init__(
-            self,
-            name: str,
-            role: str,
-            goal: str,
-            backstory: str,
-            level: AgentLevel,
-            model: str = DEFAULT_MODEL,
-            temperature: float = 0.7,
-            verbose: bool = True,
-            ollama_host: str = DEFAULT_OLLAMA_HOST,
-            **kwargs
-    ):
-        """
-        Inicializa un agente base.
-
-        Args:
-            name: Nombre del agente
-            role: Rol/función del agente
-            goal: Objetivo principal
-            backstory: Contexto/personalidad
-            level: Nivel jerárquico
-            model: Modelo LLM a usar
-            temperature: Temperatura para generación
-            verbose: Logging detallado
-            ollama_host: URL del servidor Ollama
-            **kwargs: Parámetros adicionales
-        """
+    def __init__(self, name: str, role: str, goal: str, backstory: str,
+                 level: AgentLevel, model: str = DEFAULT_MODEL,
+                 temperature: float = 0.7, verbose: bool = True,
+                 ollama_host: str = DEFAULT_OLLAMA_HOST, **kwargs):
         self.id = str(uuid.uuid4())
-        self.name = name
-        self.role = role
-        self.goal = goal
-        self.backstory = backstory
-        self.level = level
-        self.model = model
-        self.temperature = temperature
+        self.name, self.role, self.goal, self.backstory = name, role, goal, backstory
+        self.level, self.temperature = level, temperature
         self.verbose = verbose
-        self.ollama_host = ollama_host
-
+        self.model = model or os.getenv("OLLAMA_MODEL", "qwen3-coder:30b")
+        self.ollama_host = ollama_host or os.getenv("OLLAMA_URL", "http://localhost:11434")
         self.status = AgentStatus.IDLE
         self.created_at = datetime.now()
         self.last_active = None
-        self.tasks_completed = 0
-        self.tasks_failed = 0
-
-        # ✅ CORREGIDO: Inicializar LLM compatible con CrewAI 1.9.3
+        self.tasks_completed = self.tasks_failed = 0
         self.llm = self._init_crewai_llm()
-
-        # ✅ CORREGIDO: Inicializar CrewAI Agent con manejo de errores
         self.crew_agent = self._create_crew_agent()
 
     def _init_crewai_llm(self) -> Optional[Any]:
-        """
-        Inicializa LLM compatible con CrewAI 1.9.3.
+        """Inicializa LLM compatible con CrewAI 1.9.3 + interfaz LangChain"""
+        logger.debug(f"Initializing LLM: model={self.model}, host={self.ollama_host}")
 
-        ✅ Usa crewai.LLM con configuración de Ollama
-        ✅ Fallback a mock si Ollama no está disponible
-        """
         if not _HAS_CREWAI:
-            logger.warning("crewai no instalado, usando fallback")
+            logger.warning("crewai not installed, using mock LLM")
             return self._create_mock_llm()
 
-        # Verificar que Ollama esté disponible
         if not self._check_ollama_available():
-            logger.warning(f"Ollama no disponible en {self.ollama_host}, usando fallback")
+            logger.warning(f"Ollama not available at {self.ollama_host}, using mock LLM")
             return self._create_mock_llm()
 
         try:
-            # ✅ CORREGIDO: Usar crewai.LLM (no langchain) para CrewAI 1.9.3
-            return CrewLLM(
-                model=f"ollama/{self.model}",
+            logger.debug(f"Creating CrewLLM with model: {self.model}, provider: ollama")
+
+            llm = CrewLLM(
+                model=self.model,
                 base_url=self.ollama_host,
+                api_base=self.ollama_host,
+                provider="ollama",
                 temperature=self.temperature,
                 timeout=60,
                 max_tokens=4096
             )
+
+            logger.debug("✅ CrewLLM initialized")  # ← Cambiar a DEBUG
+            return CrewLLMWrapper(llm)
+
         except Exception as e:
-            logger.error(f"Failed to initialize CrewAI LLM: {e}")
+            logger.debug(f"Fallback to mock LLM: {e}")
             return self._create_mock_llm()
 
     def _create_mock_llm(self) -> Any:
-        """Crea un mock de LLM para modo offline/desarrollo"""
         from unittest.mock import MagicMock
-
         mock = MagicMock()
-        mock.invoke.return_value = MagicMock(
-            content=f"⚠️ Modo offline: Ollama no disponible en {self.ollama_host}"
-        )
-        mock.stream.return_value = iter(["⚠️ ", "Modo ", "offline"])
+        mock.invoke.return_value = MagicMock(content="⚠️ Offline mode")
+        mock.stream.return_value = iter(["⚠️ ", "offline"])
         return mock
 
     def _create_crew_agent(self) -> Optional[Any]:
-        """
-        Crea el agente CrewAI subyacente.
-
-        ✅ CORREGIDO para CrewAI 1.9.3: pasar crewai.LLM o mock compatible
-        """
         if not _HAS_CREWAI:
-            logger.warning("crewai no instalado, agente operará en modo limitado")
             return None
-
         try:
-            # ✅ CORREGIDO: self.llm ya es crewai.LLM o mock compatible
             return CrewAIAgent(
-                role=self.role,
-                goal=self.goal,
-                backstory=self.backstory,
-                llm=self.llm,  # ✅ Ahora es crewai.LLM o mock
-                verbose=self.verbose,
+                role=self.role, goal=self.goal, backstory=self.backstory,
+                llm=self.llm, verbose=self.verbose,
                 allow_delegation=(self.level != AgentLevel.EXECUTION)
             )
-        except Exception as e:
-            logger.error(f"Failed to create CrewAI agent: {e}")
-            logger.info("Continuando sin CrewAI integration - agente funcional en modo básico")
+        except:
             return None
 
     @abstractmethod
     def execute(self, task: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """
-        Ejecuta una tarea y retorna resultado.
-
-        Args:
-            task: Descripción de la tarea
-            context: Contexto adicional para la ejecución
-
-        Returns:
-            Dict con resultado de la ejecución
-        """
         pass
 
     def can_execute(self, task: str) -> bool:
-        """Verifica si el agente puede ejecutar la tarea"""
         return self.status == AgentStatus.IDLE
 
     def get_status(self) -> Dict[str, Any]:
-        """Retorna estado actual del agente"""
-        return {
-            'id': self.id,
-            'name': self.name,
-            'role': self.role,
-            'level': self.level.value,
-            'status': self.status.value,
-            'tasks_completed': self.tasks_completed,
-            'tasks_failed': self.tasks_failed,
-            'last_active': self.last_active.isoformat() if self.last_active else None,
-            'model': self.model,
-            'ollama_available': self._check_ollama_available(),
-            'crewai_available': _HAS_CREWAI
-        }
+        return {'id': self.id, 'name': self.name, 'role': self.role,
+                'level': self.level.value, 'status': self.status.value,
+                'tasks_completed': self.tasks_completed,
+                'tasks_failed': self.tasks_failed,
+                'last_active': self.last_active.isoformat() if self.last_active else None}
 
     def _check_ollama_available(self) -> bool:
-        """Verifica si Ollama está disponible en la URL configurada"""
         try:
             import urllib.request
             urllib.request.urlopen(f"{self.ollama_host}/api/tags", timeout=2)
             return True
-        except Exception:
+        except:
             return False
 
     def _update_status(self, status: AgentStatus):
-        """Actualiza el estado del agente"""
         self.status = status
         if status == AgentStatus.WORKING:
             self.last_active = datetime.now()
 
     def _parse_json_response(self, content: str) -> Dict[str, Any]:
-        """
-        Parsea respuesta JSON del LLM de forma robusta.
-
-        Args:
-            content: Contenido crudo de la respuesta del LLM
-
-        Returns:
-            Dict con los datos parseados o contenido raw
-        """
-        # Intentar extraer JSON de diferentes formatos
-        patterns = [
-            r'\{.*\}',  # JSON simple
-            r'```json\s*(.*?)\s*```',  # JSON en bloque markdown
-            r'```.*?\n(.*?)\n```',  # Cualquier bloque de código
-        ]
-
+        patterns = [r'\{.*\}', r'```json\s*(.*?)\s*```', r'```.*?\n(.*?)\n```']
         for pattern in patterns:
             match = re.search(pattern, content, re.DOTALL)
             if match:
                 try:
                     return json.loads(match.group(1) if match.groups() else match.group())
-                except json.JSONDecodeError:
+                except:
                     continue
-
-        # Fallback: intentar parsear todo el contenido
         try:
             return json.loads(content)
-        except json.JSONDecodeError:
+        except:
             pass
-
-        # Último recurso: retornar contenido raw
         return {"raw": content, "content": content}

@@ -3,14 +3,14 @@
 Comandos CLI para visualización de auditoría de seguridad.
 """
 
+from datetime import datetime, timedelta
+
 import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.tree import Tree
-from datetime import datetime, timedelta
 
-from core.security.auditor import SecurityAuditor, AuditCategory, AuditStatus, AuditLevel
+from core.security.auditor import SecurityAuditor, AuditCategory, AuditStatus
 
 console = Console()
 

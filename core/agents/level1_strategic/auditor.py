@@ -9,8 +9,7 @@ Responsable de:
 - Generar reportes de auditoría
 """
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+from typing import Dict, Any
 
 from ..base import BaseAgent, AgentLevel, AgentStatus
 

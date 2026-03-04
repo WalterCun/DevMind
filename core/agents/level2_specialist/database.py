@@ -9,7 +9,8 @@ Responsable de:
 - Asegurar integridad de datos
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
+
 from ..base import BaseAgent, AgentLevel, AgentStatus
 
 

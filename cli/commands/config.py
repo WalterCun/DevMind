@@ -7,8 +7,8 @@ Permite ver y modificar la configuración del agente.
 
 import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 
 from core.config.manager import ConfigManager
 

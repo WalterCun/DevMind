@@ -9,8 +9,8 @@ Responsable de:
 - Validar coherencia técnica del proyecto
 """
 
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from typing import Dict, Any
 
 from ..base import BaseAgent, AgentLevel, AgentStatus
 

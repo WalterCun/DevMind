@@ -73,42 +73,42 @@ class DevMindOrchestrator:
         logger.info(f"DevMindOrchestrator initialized for project {self.project_id}")
 
     def initialize(self) -> bool:
-        """
-        Inicializa todos los componentes del orquestador.
+        logger.info("Starting orchestrator initialization...")
 
-        Returns:
-            True si la inicialización fue exitosa
-        """
         if self._initialized:
+            logger.debug("Orchestrator already initialized")
             return True
 
         try:
-            # Inicializar agentes según configuración
+            logger.info("Initializing agent registry...")
             self.agent_registry.initialize(self.config)
+            logger.info(f"Agent registry initialized with {len(self.agent_registry)} agents")
 
-            # Crear proyecto en memoria relacional si no existe
-            if not self.relational_memory.get_project(self.project_id):
-                project = self.relational_memory.create_project(
-                    name=f"Project {self.project_id[-8:]}",
-                    description="Nuevo proyecto DevMind",
-                    tech_stack={"languages": self.config.preferred_languages}
-                )
-                logger.info(f"Created project in relational memory: {project.id}")
+            # Crear proyecto en memoria relacional
+            logger.info("Checking/creating project in relational memory...")
+            try:
+                project = self.relational_memory.get_project(self.project_id)
+                if not project:
+                    logger.info(f"Creating new project: {self.project_id}")
+                    project = self.relational_memory.create_project(
+                        name=f"Project {self.project_id[-8:]}",
+                        description="Nuevo proyecto DevMind",
+                        tech_stack={"languages": self.config.preferred_languages}
+                    )
+                    logger.info(f"Project created with ID: {project.id}")
+                else:
+                    logger.info(f"Project already exists: {project.id}")
+            except Exception as db_error:
+                logger.error(f"Database error during project creation: {db_error}")
+                logger.error("Tip: Run 'uv run python manage.py migrate --run-syncdb'")
+                raise
 
             self._initialized = True
-            logger.info("DevMindOrchestrator fully initialized")
+            logger.info("✅ DevMindOrchestrator fully initialized")
             return True
-        except ImportError as e:
-            error_msg = str(e).lower()
-            if "crewai" in error_msg or "llm" in error_msg:
-                logger.error(f"LLM initialization error: {e}")
-                # No fallar completamente, permitir modo limitado
-                logger.warning("Continuing with limited agent functionality")
-                return False
-            else:
-                raise
+
         except Exception as e:
-            logger.error(f"Failed to initialize orchestrator: {e}")
+            logger.error(f"❌ Failed to initialize orchestrator: {type(e).__name__}: {e}", exc_info=True)
             return False
 
     async def process_message(
@@ -332,69 +332,109 @@ class DevMindOrchestrator:
             session: Any
     ) -> None:
         """Almacena la interacción en memoria para contexto futuro"""
-        # Guardar en memoria vectorial
-        self.vector_memory.store_conversation(
-            user_message=message,
-            agent_response=str(result.get("content", result))[:2000],  # Truncar para embeddings
-            intent=intent
-        )
-
-        # Guardar en memoria relacional si hay sesión
-        if session and hasattr(session, 'id'):
-            self.relational_memory.add_message(
-                session=session,
-                role="user",
-                content=message,
+        # Guardar en memoria vectorial (siempre funciona)
+        try:
+            self.vector_memory.store_conversation(
+                user_message=message,
+                agent_response=str(result.get("content", result))[:2000],
                 intent=intent
             )
-            self.relational_memory.add_message(
-                session=session,
-                role="agent",
-                content=str(result)[:5000],  # Truncar para DB
-                metadata={"intent": intent, "result_keys": list(result.keys())}
-            )
+        except Exception as e:
+            logger.warning(f"Failed to store in vector memory: {e}")
+
+        # Guardar en memoria relacional SOLO si la sesión es una instancia real de Django
+        if session and hasattr(session, 'id') and hasattr(session, 'project_id'):
+            try:
+                # Verificar que es una instancia real de ConversationSession
+                from db.models import ConversationSession
+                if isinstance(session, ConversationSession):
+                    self.relational_memory.add_message(
+                        session=session,
+                        role="user",
+                        content=message,
+                        intent=intent
+                    )
+                    self.relational_memory.add_message(
+                        session=session,
+                        role="agent",
+                        content=str(result)[:5000],
+                        metadata={"intent": intent, "result_keys": list(result.keys())}
+                    )
+            except Exception as e:
+                logger.debug(f"Skipping relational storage (fallback session): {e}")
 
     def _format_response(self, result: Dict, intent: str) -> Dict[str, Any]:
         """Formatea resultado para respuesta al usuario"""
-        # Extraer contenido principal
-        content = result.get("content") or result.get("combined", {}).get("content", "")
+        # Extraer contenido principal con múltiples fallbacks
+        content = None
 
-        # Si el resultado es un dict con estructura conocida, extraer campos
-        if isinstance(result.get("result"), dict):
-            r = result["result"]
-            content = r.get("content") or r.get("response") or r.get("answer") or content
+        # Intentar extraer de diferentes estructuras de resultado
+        if isinstance(result, dict):
+            content = (
+                    result.get("content") or
+                    result.get("response") or
+                    result.get("answer") or
+                    (result.get("result") if isinstance(result.get("result"), str) else None) or
+                    (result.get("result", {}).get("content") if isinstance(result.get("result"), dict) else None)
+            )
+
+        # Si content sigue siendo None, convertir el resultado completo a string
+        if not content:
+            content = str(result)
+
+        # Limpiar contenido vacío
+        if not content or content.strip() == "":
+            content = "⚠️ No se generó una respuesta válida. Por favor, intenta de nuevo."
 
         return {
-            "response": content,
+            "response": content.strip(),
             "intent": intent,
-            "files_modified": result.get("files") or result.get("combined", {}).get("files", []),
-            "suggestions": result.get("suggestions") or result.get("combined", {}).get("suggestions", []),
+            "files_modified": result.get("files") or result.get("combined", {}).get("files", []) if isinstance(result,
+                                                                                                               dict) else [],
+            "suggestions": result.get("suggestions") or result.get("combined", {}).get("suggestions", []) if isinstance(
+                result, dict) else [],
             "agent_info": {
                 "name": result.get("agent"),
                 "execution_time": result.get("execution_time")
-            } if result.get("success") else None,
-            "error": result.get("error") if not result.get("success") else None
+            } if isinstance(result, dict) and result.get("success") else None,
+            "error": result.get("error") if isinstance(result, dict) and not result.get("success") else None
         }
 
     def _get_or_create_session(self, session_id: str, message: str) -> Any:
         """Obtiene o crea sesión de conversación"""
-        if session_id:
-            # En producción, recuperar de DB
-            return type('Session', (), {'id': session_id, 'project_id': self.project_id})()
-
-        # Crear nueva sesión
+        # Intentar obtener proyecto primero
         project = self.relational_memory.get_project(self.project_id)
-        if project:
-            return self.relational_memory.create_conversation_session(
-                project=project,
-                purpose=message[:100]  # Usar inicio del mensaje como propósito
-            )
 
-        # Fallback: objeto simple
-        return type('Session', (), {
-            'id': f"session_{datetime.now().timestamp()}",
-            'project_id': self.project_id
-        })()
+        if not project:
+            # Fallback: crear objeto simple si no hay proyecto en DB
+            logger.warning(f"Project {self.project_id} not found in relational memory, using fallback session")
+            return type('Session', (), {
+                'id': f"session_{datetime.now().timestamp()}",
+                'project_id': self.project_id
+            })()
+
+        # Si hay session_id, intentar recuperar de DB (simplificado para pruebas)
+        if session_id:
+            # En producción: buscar ConversationSession.objects.get(session_id=session_id)
+            pass
+
+        # Crear nueva sesión en la base de datos
+        try:
+            session = self.relational_memory.create_conversation_session(
+                project=project,
+                purpose=message[:100] if message else "Nueva conversación",
+                session_id=session_id
+            )
+            logger.debug(f"Created conversation session: {session.id}")
+            return session
+        except Exception as e:
+            logger.warning(f"Failed to create DB session: {e}, using fallback")
+            # Fallback: objeto simple
+            return type('Session', (), {
+                'id': f"session_{datetime.now().timestamp()}",
+                'project_id': self.project_id,
+                'project': project  # Incluir proyecto para que add_message funcione
+            })()
 
     async def shutdown(self) -> None:
         """Limpia recursos antes de cerrar"""

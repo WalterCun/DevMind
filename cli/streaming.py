@@ -7,13 +7,9 @@ similar a como lo hace ChatGPT o Claude.
 """
 
 import asyncio
-import sys
 from typing import AsyncGenerator, Dict, Any, Optional, Callable
+
 from rich.console import Console
-from rich.live import Live
-from rich.text import Text
-from rich.spinner import Spinner
-from rich.panel import Panel
 
 console = Console()
 

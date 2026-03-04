@@ -3,8 +3,9 @@
 Tests para RelationalMemory.search() - versión sin DB.
 """
 
-import pytest
 import inspect
+
+import pytest
 
 
 def test_search_method_signature():
@@ -31,7 +32,6 @@ def test_search_method_signature():
 def test_search_return_type_annotation():
     """Verifica que search tiene tipo de retorno anotado"""
     from core.memory.relational_store import RelationalMemory
-    import typing
 
     method = getattr(RelationalMemory, 'search')
     return_annotation = method.__annotations__.get('return')

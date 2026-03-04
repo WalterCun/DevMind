@@ -6,10 +6,9 @@ Comandos CLI para gestión de sandbox de seguridad.
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.prompt import Confirm
 
-from core.security.sandbox import ExecutionSandbox, SandboxConfig, SandboxStatus
+from core.security.sandbox import ExecutionSandbox, SandboxConfig
 
 console = Console()
 

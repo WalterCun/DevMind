@@ -6,18 +6,17 @@ Este agente analiza necesidades del sistema y genera
 nuevas herramientas para satisfacerlas.
 """
 
-import logging
 import json
+import logging
 import re
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-from datetime import datetime
+from typing import Dict, Any, Optional
 
 from ..agents.base import BaseAgent, AgentLevel, AgentStatus
-from ..tools.base import BaseTool, ToolDefinition, ToolResult, ToolParameter
-from ..tools.registry import ToolRegistry
 from ..memory.vector_store import VectorMemory
 from ..security.validator import CodeValidator
+from ..tools.base import BaseTool
+from ..tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 

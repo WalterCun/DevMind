@@ -6,16 +6,14 @@ Este agente analiza brechas en las capacidades del equipo
 y crea nuevos agentes para satisfacerlas.
 """
 
-import logging
 import json
+import logging
 import re
-from typing import Dict, Any, Optional, List, Type
-from datetime import datetime
+from typing import Dict, Any
 
 from ..agents.base import BaseAgent, AgentLevel, AgentStatus
 from ..agents.registry import AgentRegistry
 from ..tools.registry import ToolRegistry
-from ..config.schema import AgentConfig
 
 logger = logging.getLogger(__name__)
 

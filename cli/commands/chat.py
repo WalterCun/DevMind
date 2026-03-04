@@ -1,84 +1,50 @@
 # devmind-core/cli/commands/chat.py
 """
-Comando de chat integrado con el orchestrator.
-
-Permite conversación interactiva con el agente DevMind,
-con contexto persistente y streaming de respuestas.
+Comando chat para DevMind Core.
+Proporciona interfaz interactiva de conversación con el agente.
 """
 
 import asyncio
+
 import click
 from rich.console import Console
-from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.panel import Panel
 from rich.prompt import Prompt
 
 from core.config.manager import ConfigManager
 from core.orchestrator import DevMindOrchestrator
-from cli.context import ContextManager, SessionContext
-from cli.streaming import stream_agent_response, StreamingResponse
 
 console = Console()
 
 
 @click.command('chat')
-@click.argument('message', required=False)
 @click.option('--project', '-p', 'project_id', help='ID del proyecto')
-@click.option('--mode', '-m', type=click.Choice(['chat', 'plan', 'code', 'fix']), default='chat')
-@click.option('--session', '-s', 'session_id', help='ID de sesión para continuar')
-@click.option('--no-stream', is_flag=True, help='Desactivar streaming, mostrar respuesta completa')
-def chat_command(
-        message: str,
-        project_id: str,
-        mode: str,
-        session_id: str,
-        no_stream: bool
-) -> None:
-    """
-    💬 Iniciar sesión de chat con el agente DevMind.
-
-    Puedes enviar un mensaje inicial como argumento o entrar en modo interactivo.
+@click.option('--clear', '-c', is_flag=True, help='Limpiar contexto e iniciar nuevo')
+@click.option('--stream', '-s', is_flag=True, help='Streaming de respuesta token por token')
+@click.argument('initial_message', nargs=1, required=False)  # ✅ Aceptar mensaje inicial opcional
+def chat_command(project_id: str, clear: bool, stream: bool, initial_message: str):
+    """💬 Conversación interactiva con el agente
 
     Ejemplos:
-
-        devmind chat
-        devmind chat "Quiero crear una API para hoteles"
-        devmind chat --project my-hotel-api --mode code
-        devmind chat --session abc123  # Continuar sesión anterior
+      devmind chat                          # Modo interactivo
+      devmind chat "Hola"                   # Mensaje inicial
+      devmind chat -p myproject "Planificar API"
     """
-    config_manager = ConfigManager()
 
-    # Verificar inicialización
-    if not config_manager.is_initialized():
+    # Cargar configuración
+    config = ConfigManager().get_config()
+    if not config:
         console.print(Panel(
-            "❌ Debes inicializar primero.\n\n"
-            "Ejecuta: [bold]devmind init[/bold]",
-            title="Configuración Requerida",
-            style="red"
+            "[yellow]⚠️ Configuración no inicializada[/yellow]\n"
+            "Ejecutá [bold]devmind init[/bold] primero",
+            style="yellow"
         ))
         return
 
-    config = config_manager.get_config()
-
-    # Mostrar header
-    _show_chat_header(config, mode, project_id)
-
-    # Inicializar contexto de sesión
-    context_manager = ContextManager()
-
-    if session_id:
-        session = context_manager.load_session(session_id)
-        if session:
-            console.print(f"[dim]📌 Sesión cargada: {session_id}[/dim]")
-        else:
-            console.print(f"[yellow]⚠️  Sesión no encontrada, creando nueva[/yellow]")
-            session = context_manager.create_session(project_id=project_id, mode=mode)
-    else:
-        session = context_manager.get_or_create_session(project_id=project_id, mode=mode)
-
-    # Inicializar orchestrator
+    # Inicializar orquestador
     orchestrator = DevMindOrchestrator(
-        project_id=session.project_id,
+        project_id=project_id,
         config=config
     )
 
@@ -86,208 +52,132 @@ def chat_command(
         console.print("[red]❌ Error inicializando el orchestrator[/red]")
         return
 
+    # Mostrar banner
+    console.print(Panel.fit(
+        f"[bold]💬 Modo:[/bold] CHAT\n"
+        f"[bold]🤖 Agente:[/bold] {config.agent_name}\n"
+        f"[bold]⚡ Autonomía:[/bold] {config.autonomy_mode.value}",
+        title="DevMind Chat",
+        style="cyan"
+    ))
+    console.print()
 
+    # Bucle principal de chat
+    session_id = None
 
-    # Si hay mensaje inicial, procesarlo
-    if message:
-        console.print(f"[bold blue]Tú:[/bold blue] {message}")
-        asyncio.run(
-            _process_message(orchestrator, context_manager, message, session.session_id, no_stream, config.agent_name)
+    # Si hay mensaje inicial, procesarlo primero
+    if initial_message:
+        console.print(f"[bold green]Tú[/bold green]: {initial_message}")
+        console.print()
+        console.print("[bold blue]Jarvis[/bold blue] está pensando...")
+
+        result = asyncio.run(
+            orchestrator.process_message(
+                message=initial_message,
+                session_id=session_id
+            )
         )
-        return
 
-    # Modo interactivo
-    console.print(
-        "\n[dim]Escribe tus mensajes. Usa [/dim][bold]/help[/bold][dim] para comandos, [/dim][bold]/quit[/bold][dim] para salir.\n[/dim]")
+        _display_response(result, stream)
 
+        if result.get("session_id"):
+            session_id = result["session_id"]
+
+        console.print()
+
+    # Modo interactivo: leer mensajes del usuario
     while True:
         try:
-            user_input = Prompt.ask(
-                "[bold blue]Tú[/bold blue]",
-                default=""
-            ).strip()
+            # Obtener mensaje del usuario
+            user_input = Prompt.ask("[bold green]Tú[/bold green]")
 
-            if not user_input:
-                continue
-
+            # Comandos especiales
             if user_input.lower() in ['/quit', '/exit', '/q']:
-                _show_goodbye(config.agent_name)
+                console.print("[dim]👋 Hasta luego[/dim]")
                 break
 
-            if user_input.lower() == '/help':
+            if user_input.lower() in ['/help', '/h']:
                 _show_help()
                 continue
 
-            if user_input.startswith('/mode '):
-                new_mode = user_input.split(' ', 1)[1].strip()
-                try:
-                    session.set_mode(new_mode)
-                    session.save()
-                    console.print(f"[green]✅ Modo cambiado a: {new_mode}[/green]")
-                except ValueError as e:
-                    console.print(f"[red]❌ {e}[/red]")
-                continue
-
-            if user_input.startswith('/project '):
-                new_project = user_input.split(' ', 1)[1].strip()
-                session.set_project(new_project)
-                session.save()
-                console.print(f"[green]✅ Proyecto cambiado a: {new_project}[/green]")
-                continue
-
-            if user_input == '/clear':
-                session.clear_history()
-                session.save()
-                console.print("[green]✅ Historial limpiado[/green]")
-                continue
-
-            if user_input == '/context':
-                _show_context(session)
+            if user_input.lower() in ['/clear', '/cls'] or clear:
+                console.print("[dim]🧹 Contexto limpiado[/dim]")
+                session_id = None
                 continue
 
             # Procesar mensaje
-            asyncio.run(
-                _process_message(orchestrator, context_manager, user_input, session.session_id, no_stream,
-                                 config.agent_name)
+            console.print()
+            console.print("[bold blue]Jarvis[/bold blue] está pensando...")
+
+            result = asyncio.run(
+                orchestrator.process_message(
+                    message=user_input,
+                    session_id=session_id
+                )
             )
+
+            _display_response(result, stream)
+
+            console.print()
+
+            # Guardar session_id para contexto continuo
+            if not session_id and result.get("session_id"):
+                session_id = result["session_id"]
 
         except KeyboardInterrupt:
-            console.print("\n[yellow]⚠️  Interrumpido por el usuario[/yellow]")
-            continue
-        except EOFError:
-            _show_goodbye(config.agent_name)
+            console.print("\n[dim]⚠️ Interrumpido por usuario[/dim]")
             break
         except Exception as e:
-            console.print(f"[red]❌ Error: {str(e)}[/red]")
-            console.print_exception(show_locals=False)
+            console.print(f"[red]❌ Error procesando mensaje: {type(e).__name__}: {e}[/red]")
+            console.print("[dim]Tip: Usá /help para ver comandos disponibles[/dim]")
+            break
+
+    # Cleanup
+    asyncio.run(orchestrator.shutdown())
 
 
-async def _process_message(
-        orchestrator: DevMindOrchestrator,
-        context_manager: ContextManager,
-        message: str,
-        session_id: str,
-        no_stream: bool,
-        agent_name: str
-) -> None:
-    """Procesa un mensaje y muestra la respuesta"""
-    # Guardar mensaje del usuario
-    context_manager.add_message("user", message)
+def _display_response(result: dict, stream: bool):
+    """Muestra la respuesta del agente"""
+    if result.get("error"):
+        console.print(f"[red]❌ Error: {result['error']}[/red]")
+        return
 
-    try:
-        if no_stream:
-            # Modo sin streaming
-            result = await orchestrator.process_message(
-                message=message,
-                session_id=session_id
-            )
-            console.print(f"\n[bold green]{agent_name}:[/bold green]")
-            console.print(Markdown(result.get("response", "Sin respuesta")))
-        else:
-            # Modo con streaming
-            from cli.streaming import stream_agent_response
-            result = await stream_agent_response(
-                orchestrator=orchestrator,
-                message=message,
-                session_id=session_id,
-                agent_name=agent_name
-            )
+    response = result.get("response", result.get("content", str(result)))
 
-        # Guardar respuesta del agente
-        if result:
-            context_manager.add_message(
-                "agent",
-                result.get("response", ""),
-                intent=result.get("intent"),
-                metadata={
-                    "files_modified": result.get("files_modified", []),
-                    "suggestions": result.get("suggestions", [])
-                }
-            )
+    if stream:
+        # Streaming token por token (simulado)
+        for chunk in _stream_text(response):
+            console.print(chunk, end="", highlight=False)
+        console.print()
+    else:
+        # Mostrar respuesta completa con markdown
+        console.print(Markdown(response))
 
-            # Mostrar archivos modificados si los hay
-            if result.get("files_modified"):
-                console.print("\n[bold blue]📁 Archivos modificados:[/bold blue]")
-                for file in result["files_modified"]:
-                    console.print(f"  • {file.get('path', 'unknown')}")
-
-            # Mostrar sugerencias si las hay
-            if result.get("suggestions"):
-                console.print("\n[bold yellow]💡 Sugerencias:[/bold yellow]")
-                for suggestion in result["suggestions"]:
-                    console.print(f"  • {suggestion}")
-
-    except Exception as e:
-        console.print(f"\n[red]❌ Error procesando mensaje: {str(e)}[/red]")
-        context_manager.add_message(
-            "system",
-            f"Error: {str(e)}",
-            metadata={"error": True}
-        )
+    # Mostrar sugerencias si existen
+    if result.get("suggestions"):
+        console.print("\n[bold]💡 Sugerencias:[/bold]")
+        for suggestion in result["suggestions"][:3]:
+            console.print(f"  • {suggestion}")
 
 
-def _show_chat_header(config, mode: str, project_id: str) -> None:
-    """Muestra header del chat"""
-    header_lines = [
-        f"[bold green]💬 Modo:[/bold green] {mode.upper()}",
-        f"[bold green]🤖 Agente:[/bold green] {config.agent_name}",
-        f"[bold green]⚡ Autonomía:[/bold green] {config.autonomy_mode}",
-    ]
-
-    if project_id:
-        header_lines.append(f"[bold green]📁 Proyecto:[/bold green] {project_id}")
-
-    console.print(Panel(
-        "\n".join(header_lines),
-        title="DevMind Chat",
-        style="green",
-        border_style="bright_green"
-    ))
-
-
-def _show_help() -> None:
+def _show_help():
     """Muestra ayuda de comandos"""
-    help_text = """
-## Comandos Disponibles
-
-| Comando | Descripción |
-|---------|-------------|
-| `/help` | Mostrar esta ayuda |
-| `/quit` | Salir del chat |
-| `/clear` | Limpiar historial de conversación |
-| `/context` | Mostrar contexto actual de la sesión |
-| `/mode <modo>` | Cambiar modo (chat, plan, code, fix) |
-| `/project <id>` | Cambiar proyecto activo |
-
-## Consejos
-
-- Sé específico en tus solicitudes
-- Proporciona contexto cuando sea relevante
-- Usa `/mode code` para generación de código
-- Usa `/mode fix` para reportar bugs
-- Usa `/clear` para empezar de cero sin salir
-"""
-    console.print(Markdown(help_text))
-
-
-def _show_context(session: SessionContext) -> None:
-    """Muestra contexto actual de la sesión"""
     console.print(Panel(
-        f"[bold]Sesión:[/bold] {session.session_id}\n"
-        f"[bold]Proyecto:[/bold] {session.project_id or 'No asignado'}\n"
-        f"[bold]Modo:[/bold] {session.mode}\n"
-        f"[bold]Mensajes:[/bold] {len(session.message_history)}\n"
-        f"[bold]Creada:[/bold] {session.created_at.strftime('%Y-%m-%d %H:%M')}",
-        title="📋 Contexto de Sesión",
-        style="blue"
-    ))
-
-
-def _show_goodbye(agent_name: str) -> None:
-    """Muestra mensaje de despedida"""
-    console.print(Panel(
-        f"\n[bold]👋 ¡Hasta luego![/bold]\n\n"
-        f"Fui [bold]{agent_name}[/bold], tu agente de desarrollo.\n"
-        f"Tu sesión está guardada. Usa [bold]devmind chat --session <id>[/bold] para continuar.\n",
+        "[bold]Comandos disponibles:[/bold]\n\n"
+        "[green]/quit[/green], [green]/exit[/green], [green]/q[/green]  - Salir del chat\n"
+        "[green]/clear[/green], [green]/cls[/green]              - Limpiar contexto\n"
+        "[green]/help[/green], [green]/h[/green]                 - Mostrar esta ayuda\n\n"
+        "[dim]Escribí tu mensaje normalmente para conversar con el agente.[/dim]",
+        title="📖 Ayuda de Chat",
         style="green"
     ))
+
+
+def _stream_text(text: str, chunk_size: int = 10):
+    """Generador para streaming de texto (simulado)"""
+    for i in range(0, len(text), chunk_size):
+        yield text[i:i + chunk_size]
+
+
+if __name__ == '__main__':
+    chat_command()

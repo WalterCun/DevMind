@@ -6,11 +6,11 @@ Comandos CLI para gestión de addons.
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.prompt import Confirm
+from rich.table import Table
 
-from core.addons.registry import AddonRegistry
 from core.addons.loader import AddonLoader
+from core.addons.registry import AddonRegistry
 
 console = Console()
 

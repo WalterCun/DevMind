@@ -6,11 +6,10 @@ Maneja la carga, guarda y actualización de la configuración del agente
 desde el sistema de archivos local.
 """
 
-from pathlib import Path
-from typing import Optional, Dict, Any
 import json
 from datetime import datetime
-import os
+from pathlib import Path
+from typing import Optional, Dict, Any
 
 from .schema import AgentConfig
 

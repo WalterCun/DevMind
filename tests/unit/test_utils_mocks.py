@@ -4,6 +4,7 @@ Tests para verificar que las factories de mocks funcionan correctamente.
 """
 
 import pytest
+
 from core.agents.base import AgentLevel, AgentStatus
 
 

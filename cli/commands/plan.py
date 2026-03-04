@@ -7,18 +7,17 @@ identificar riesgos y definir entregables.
 """
 
 import asyncio
+
 import click
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
-from rich.markdown import Markdown
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
+from cli.context import ContextManager
 from core.config.manager import ConfigManager
 from core.orchestrator import DevMindOrchestrator
-from cli.context import ContextManager
-from cli.streaming import stream_agent_response
 
 console = Console()
 

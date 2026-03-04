@@ -6,25 +6,22 @@ Verifica configuración, servicios, dependencias y entorno para identificar
 y resolver problemas potenciales antes de ejecutar el agente.
 """
 
-import click
-import sys
-import os
 import json
+import os
+import platform
 import shutil
 import socket
 import subprocess
-import platform
-from pathlib import Path
+import sys
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Dict, List
 
+import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.tree import Tree
-from rich.syntax import Syntax
-from rich.markdown import Markdown
 
 from core.config.manager import ConfigManager
 from core.utils.helpers import safe_get

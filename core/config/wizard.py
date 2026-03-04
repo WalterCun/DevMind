@@ -6,12 +6,11 @@ Guía interactiva para que el usuario configure la identidad,
 capacidades y preferencias del agente autónomo.
 """
 
-from pathlib import Path
-from typing import Dict, Any, Optional
 import json
 import sys
-import tempfile
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any
 
 try:
     import questionary
@@ -25,7 +24,6 @@ from .schema import (
     AutonomyMode,
     LearningMode,
     AuditFrequency,
-    EmailConfig,
     GitConfig,
 )
 

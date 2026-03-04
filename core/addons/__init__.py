@@ -4,8 +4,8 @@ Sistema de addons de DevMind Core.
 """
 
 from .base import BaseAddon, AddonManifest
-from .registry import AddonRegistry
 from .loader import AddonLoader
+from .registry import AddonRegistry
 
 __all__ = [
     "BaseAddon",

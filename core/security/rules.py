@@ -7,14 +7,15 @@ personalizables para controlar el comportamiento del agente.
 """
 
 import json
-import yaml
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable, Union
-import re
+from typing import Dict, Any, Optional, List, Callable
+
+import yaml
 
 logger = logging.getLogger(__name__)
 

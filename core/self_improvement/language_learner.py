@@ -6,12 +6,11 @@ Este agente analiza código y documentación para aprender
 nuevos lenguajes de programación y frameworks.
 """
 
-import logging
 import json
+import logging
 import re
-from typing import Dict, Any, Optional, List
 from datetime import datetime
-from pathlib import Path
+from typing import Dict, Any, Optional, List
 
 from ..agents.base import BaseAgent, AgentLevel, AgentStatus
 from ..memory.vector_store import VectorMemory, MemoryCategory

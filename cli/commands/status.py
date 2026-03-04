@@ -7,9 +7,8 @@ Muestra el estado actual del sistema, configuración completa y métricas.
 
 import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
-from rich.columns import Columns
+from rich.table import Table
 from rich.text import Text
 
 from core.config.manager import ConfigManager

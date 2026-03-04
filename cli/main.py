@@ -4,8 +4,11 @@ Entry point principal de DevMind Core CLI.
 
 Punto de entrada para todos los comandos de la interfaz de línea de comandos.
 """
+import logging
+from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 from rich.console import Console
 
 from cli.commands import tools_group, addons_group
@@ -17,6 +20,15 @@ from cli.commands.fix import fix_command
 from cli.commands.init import init_command
 from cli.commands.plan import plan_command
 from cli.commands.status import status_command
+from core.utils.logger import setup_logging
+
+setup_logging(level="DEBUG", log_file="~/.devmind/devmind.log")
+logger = logging.getLogger(__name__)
+
+env_path = Path(__file__).parent.parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+    logger.debug(f"Loaded environment from {env_path}")
 
 console = Console()
 
