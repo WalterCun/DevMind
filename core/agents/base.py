@@ -90,7 +90,8 @@ class BaseAgent(ABC):
             logger.debug(f"Fallback to mock LLM: {e}")
             return self._create_mock_llm()
 
-    def _create_mock_llm(self) -> Any:
+    @staticmethod
+    def _create_mock_llm() -> Any:
         from unittest.mock import MagicMock
         mock = MagicMock()
         mock.invoke.return_value = MagicMock(content="⚠️ Offline mode")
