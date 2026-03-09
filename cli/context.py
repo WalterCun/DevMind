@@ -1,4 +1,4 @@
-# devmind-core/cli/context.py
+# cli/context.py
 """
 Gestión de contexto de sesión para la CLI de DevMind.
 
@@ -246,6 +246,9 @@ class ContextManager:
         if self.current_context:
             self.current_context.clear_history()
             self.current_context.save()
+        else:
+            # Si no hay contexto, crear uno limpio
+            self.create_session()
 
     def get_context(self) -> Optional[SessionContext]:
         """Obtiene el contexto actual"""

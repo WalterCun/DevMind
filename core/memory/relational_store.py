@@ -1,21 +1,27 @@
-# devmind-core/core/memory/relational_store.py
+# devmind/core/memory/relational_store.py
 """
-Memoria relacional para DevMind Core.
-Compatible con PostgreSQL y SQLite.
+Memoria relacional para DevMind Core usando PostgreSQL/SQLite.
+Proporciona almacenamiento estructurado para:
+- Estado de proyectos y fases
+- Tareas y su progreso
+- Decisiones y bugs
+- Métricas y auditoría
 """
-
-import logging
 import os
-import uuid
-from contextlib import contextmanager
-from enum import Enum
+import logging
 from typing import List, Dict, Any, Optional
+from datetime import datetime
+from enum import Enum
+from contextlib import contextmanager
+import uuid
+
+logger = logging.getLogger(__name__)
 
 # ✅ FORZAR SQLite si está configurado
 USE_SQLITE = os.getenv("DEVMENT_TEST_USE_SQLITE") == "True"
 if USE_SQLITE:
     os.environ.setdefault("DATABASE_URL", "sqlite:///devmind_test.db")
-    logging.info(f"🔧 Using SQLite: {os.getenv('DATABASE_URL')}")
+    logger.info(f"🔧 Using SQLite: {os.getenv('DATABASE_URL')}")
 
 # Configurar Django ANTES de importar modelos
 if not os.environ.get("DJANGO_SETTINGS_MODULE"):
@@ -25,12 +31,11 @@ import django
 
 django.setup()
 
-from django.db import transaction, IntegrityError
+from django.db import models, transaction, IntegrityError
 from db.models import (
-    Project, Task, ConversationSession, Message
+    Project, ProjectPhase, Task, Decision, BugReport,
+    ConversationSession, Message
 )
-
-logger = logging.getLogger(__name__)
 
 
 class MemoryOperation(str, Enum):
@@ -46,13 +51,11 @@ class MemoryOperation(str, Enum):
 
 class RelationalMemory:
     """
-    Memoria relacional basada en Django ORM para estado estructurado.
-    Compatible con PostgreSQL y SQLite.
+    Memoria relacional basada en PostgreSQL/SQLite para estado estructurado.
     """
 
     def __init__(self, db_url: str = None):
-        """Inicializa la memoria relacional"""
-        # ✅ Usar SQLite si está configurado
+        """Inicializa la memoria relacional."""
         if USE_SQLITE:
             self.db_url = "sqlite:///devmind_test.db"
         else:
@@ -85,10 +88,10 @@ class RelationalMemory:
                 tech_stack=tech_stack or {},
                 **kwargs
             )
-            logger.info(f"✅ Created project: {project.id} - {name}")
+            logger.info(f"Created project: {project.id} - {name}")
             return project
         except IntegrityError as e:
-            logger.error(f"❌ Failed to create project: {e}")
+            logger.error(f"Failed to create project: {e}")
             raise
 
     def get_project(self, project_id: str) -> Optional[Project]:
@@ -104,14 +107,14 @@ class RelationalMemory:
             limit: int = 50,
             offset: int = 0
     ) -> List[Project]:
-        """Lista proyectos con filtros"""
+        """Lista proyectos con filtros opcionales"""
         queryset = Project.objects.all()
         if status:
             queryset = queryset.filter(status=status)
         return queryset.order_by("-updated_at")[offset:offset + limit]
 
     def delete_project(self, project_id: str) -> bool:
-        """Elimina proyecto"""
+        """Elimina proyecto y sus datos asociados"""
         try:
             project = self.get_project(project_id)
             if project:
@@ -133,7 +136,7 @@ class RelationalMemory:
             purpose: str,
             session_id: str = None
     ) -> ConversationSession:
-        """Crea sesión de conversación"""
+        """Crea una nueva sesión de conversación"""
         return ConversationSession.objects.create(
             project=project,
             session_id=session_id or str(uuid.uuid4()),
@@ -147,7 +150,7 @@ class RelationalMemory:
             content: str,
             agent_type: str = None,
             intent: str = None,
-            metadata: Dict[str, Any] = None,  # ✅ CORREGIDO: metadata: Dict[str, Any]
+            metadata: Dict = None,
             related_tasks: List[int] = None
     ) -> Message:
         """Agrega un mensaje a la conversación"""
@@ -157,10 +160,9 @@ class RelationalMemory:
             content=content,
             agent_type=agent_type,
             intent=intent,
-            metadata=metadata or {}  # ✅ Usar metadata (no meta)
+            metadata=metadata or {}
         )
 
-        # Relacionar con tareas si se especifica
         if related_tasks:
             for task_id in related_tasks:
                 try:
@@ -168,22 +170,19 @@ class RelationalMemory:
                     message.related_tasks.add(task)
                 except Task.DoesNotExist:
                     pass
-
         return message
 
+    def get_conversation_history(
+            self,
+            session: ConversationSession,
+            limit: int = 50,
+            role: str = None
+    ) -> List[Message]:
+        """Obtiene historial de conversación"""
+        queryset = Message.objects.filter(session=session)
+        if role:
+            queryset = queryset.filter(role=role)
+        return queryset.order_by("created_at")[:limit]
 
-def get_conversation_history(
-        self,
-        session: ConversationSession,
-        limit: int = 50,
-        role: str = None
-) -> List[Message]:
-    """Obtiene historial de conversación"""
-    queryset = Message.objects.filter(session=session)
-    if role:
-        queryset = queryset.filter(role=role)
-    return queryset.order_by("created_at")[:limit]
-
-
-def __repr__(self) -> str:
-    return f"RelationalMemory(db={'SQLite' if USE_SQLITE else 'PostgreSQL'})"
+    def __repr__(self) -> str:
+        return f"RelationalMemory(db={'SQLite' if USE_SQLITE else 'PostgreSQL'})"

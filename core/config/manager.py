@@ -1,23 +1,20 @@
-# devmind-core/core/config/manager.py
+# devmind/core/config/manager.py
 """
 Gestor de configuración de DevMind Core.
-
 Maneja la carga, guarda y actualización de la configuración del agente
 desde el sistema de archivos local.
 """
-
-import json
-from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
-
+import json
+from datetime import datetime
+import os
 from .schema import AgentConfig
 
 
 class ConfigManager:
     """
     Gestiona el ciclo de vida de la configuración del agente.
-
     Singleton que asegura que solo haya una instancia de configuración
     activa en memoria, sincronizada con el sistema de archivos.
     """
@@ -94,7 +91,6 @@ class ConfigManager:
 
         self.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Usar exclude para evitar campos computados
         config_dict = self._config.model_dump(
             exclude={'created_at', 'updated_at'},
             by_alias=True,
@@ -107,7 +103,6 @@ class ConfigManager:
     def reset_config(self) -> None:
         """Resetea configuración a valores por defecto"""
         if self.CONFIG_FILE.exists():
-            # Crear backup
             backup_path = self.CONFIG_FILE.with_suffix('.json.bak')
             self.CONFIG_FILE.rename(backup_path)
             print(f"📦 Configuración anterior respaldada en: {backup_path}")
@@ -131,7 +126,7 @@ class ConfigManager:
         if project_config_path.exists():
             with open(project_config_path, 'r', encoding='utf-8') as f:
                 project_config = json.load(f)
-                base_config.update(project_config)
+            base_config.update(project_config)
 
         return base_config
 

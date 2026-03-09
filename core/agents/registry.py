@@ -1,21 +1,19 @@
-# devmind-core/core/agents/registry.py
+# devmind/core/agents/registry.py
 """
 Registro y gestión de agentes para DevMind Core.
 Soporta carga dinámica (lazy loading) para optimizar inicialización.
 """
-
 import logging
 import os
 from typing import Dict, List, Optional, Any, Set
-
 from .base import BaseAgent, AgentLevel, AgentStatus
 
 logger = logging.getLogger(__name__)
 
-# ✅ Obtener modelo de LLM desde variable de entorno
+
 DEFAULT_LLM_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 
-# ✅ Mapeo de intenciones a agentes requeridos
+
 INTENT_AGENT_MAP = {
     "plan": ["Project Director"],
     "code": ["Backend Specialist", "Frontend Specialist"],
@@ -35,7 +33,6 @@ AGENT_MODULE_MAP = {
     "Project Director": ("level1_strategic.director", "DirectorAgent"),
     "Architect Principal": ("level1_strategic.architect", "ArchitectAgent"),
     "Security Auditor": ("level1_strategic.auditor", "AuditorAgent"),
-
     # Nivel 2 - Especialistas
     "Backend Specialist": ("level2_specialist.backend", "BackendSpecialistAgent"),
     "Frontend Specialist": ("level2_specialist.frontend", "FrontendSpecialistAgent"),
@@ -43,7 +40,6 @@ AGENT_MODULE_MAP = {
     "DevOps Specialist": ("level2_specialist.devops", "DevOpsSpecialistAgent"),
     "Security Specialist": ("level2_specialist.security", "SecuritySpecialistAgent"),
     "QA Specialist": ("level2_specialist.qa", "QASpecialistAgent"),
-
     # Nivel 3 - Ejecución
     "Coder Agent": ("level3_execution.coder", "CoderAgent"),
     "Tester Agent": ("level3_execution.tester", "TesterAgent"),
@@ -55,21 +51,13 @@ AGENT_MODULE_MAP = {
 class AgentRegistry:
     """
     Registro centralizado de agentes con soporte jerárquico y carga dinámica.
-
-    Características:
-    - Singleton para acceso global consistente
-    - Carga dinámica (lazy loading) de agentes
-    - Registro por ID, rol y nivel
-    - Inicialización mínima al inicio
-    - Carga bajo demanda según tarea
-    - Estado y métricas por agente
     """
 
     _instance: Optional['AgentRegistry'] = None
     _agents: Dict[str, BaseAgent]
     _by_role: Dict[str, str]
     _by_level: Dict[AgentLevel, List[str]]
-    _loaded_agents: Set[str]  # ✅ Track de agentes cargados
+    _loaded_agents: Set[str]
     _initialized: bool
 
     def __new__(cls) -> 'AgentRegistry':
@@ -84,14 +72,7 @@ class AgentRegistry:
         return cls._instance
 
     def initialize(self, config: Any, minimal: bool = True) -> None:
-        """
-        Inicializa el registro de agentes.
-
-        Args:
-            config: Configuración del agente
-            minimal: Si True, solo carga agentes core (recomendado)
-                    Si False, carga todos los agentes (legacy)
-        """
+        """Inicializa el registro de agentes."""
         if self._initialized:
             logger.debug("AgentRegistry already initialized")
             return
@@ -114,9 +95,7 @@ class AgentRegistry:
 
     def _load_core_agents(self, config: Any) -> None:
         """Carga solo agentes core esenciales"""
-        # ✅ Solo Project Director al inicio
         core_agents = ["Project Director"]
-
         for role in core_agents:
             try:
                 agent = self._load_agent(role, config)
@@ -126,16 +105,7 @@ class AgentRegistry:
                 logger.warning(f"Failed to load core agent {role}: {e}")
 
     def _load_agent(self, role: str, config: Any) -> Optional[BaseAgent]:
-        """
-        Carga un agente específico bajo demanda.
-
-        Args:
-            role: Rol del agente a cargar
-            config: Configuración para inicialización
-
-        Returns:
-            Instancia del agente o None si falla
-        """
+        """Carga un agente específico bajo demanda."""
         if role not in AGENT_MODULE_MAP:
             logger.error(f"Unknown agent role: {role}")
             return None
@@ -159,15 +129,16 @@ class AgentRegistry:
             return None
 
     def ensure_agents_loaded(self, intent: str, config: Any) -> List[str]:
+        """Asegura que los agentes necesarios para una intención estén cargados."""
         required_roles = INTENT_AGENT_MAP.get(intent, ["Project Director"])
         loaded = []
 
         for role in required_roles:
             if role not in self._loaded_agents:
-                logger.info(f"🔄 Loading agent on-demand: {role} for intent '{intent}'")  # ← LOG INFO
+                logger.info(f"🔄 Loading agent on-demand: {role} for intent '{intent}'")
                 agent = self._load_agent(role, config)
                 if agent:
-                    self.register(agent)  # ← Esto ya loguea el registro
+                    self.register(agent)
                     loaded.append(role)
             else:
                 loaded.append(role)
@@ -178,20 +149,8 @@ class AgentRegistry:
         return loaded
 
     def get_agents_for_intent(self, intent: str, config: Any) -> List[BaseAgent]:
-        """
-        Obtiene agentes apropiados para una intención, cargándolos si es necesario.
-
-        Args:
-            intent: Intención de la tarea
-            config: Configuración del agente
-
-        Returns:
-            Lista de agentes listos para ejecutar
-        """
-        # ✅ Asegurar que los agentes estén cargados
+        """Obtiene agentes apropiados para una intención, cargándolos si es necesario."""
         self.ensure_agents_loaded(intent, config)
-
-        # Obtener agentes cargados para esta intención
         required_roles = INTENT_AGENT_MAP.get(intent, ["Project Director"])
         agents = []
 
@@ -203,6 +162,7 @@ class AgentRegistry:
         return agents
 
     def register(self, agent: BaseAgent) -> str:
+        """Registra un agente en el sistema."""
         if agent.id in self._agents:
             logger.warning(f"Agent {agent.id} already registered")
             return agent.id
@@ -262,11 +222,7 @@ class AgentRegistry:
         for agent in agents:
             self.register(agent)
 
-    def _register_priority_specialists(
-            self,
-            priority_agents: List[str],
-            config: Any
-    ) -> None:
+    def _register_priority_specialists(self, priority_agents: List[str], config: Any) -> None:
         """Registra solo agentes especialistas prioritarios"""
         specialist_map = {
             "backend": ("level2_specialist.backend", "BackendSpecialistAgent"),
@@ -287,7 +243,7 @@ class AgentRegistry:
                     import importlib
                     module = importlib.import_module(f"core.agents.{module_path}")
                     agent_class = getattr(module, class_name)
-                    agent = agent_class(model=llm_model)  # ← Usar llm_model correcto
+                    agent = agent_class(model=llm_model)
                     self.register(agent)
                     logger.debug(f"Registered priority specialist: {priority}")
                 except (ImportError, AttributeError) as e:
@@ -359,8 +315,6 @@ class AgentRegistry:
             }
         }
 
-    # ... [resto de métodos existentes se mantienen] ...
-
     def get_status_summary(self) -> Dict[str, Any]:
         """Obtiene resumen de estado de todos los agentes"""
         return {
@@ -396,3 +350,4 @@ class AgentRegistry:
 
     def __repr__(self) -> str:
         return f"AgentRegistry(loaded={len(self._loaded_agents)}/{len(AGENT_MODULE_MAP)}, initialized={self._initialized})"
+

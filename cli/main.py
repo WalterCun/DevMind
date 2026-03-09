@@ -23,18 +23,22 @@ from cli.commands.plan import plan_command
 from cli.commands.status import status_command
 from core.utils.logger import setup_logging
 
+env_path = Path(__file__).parent.parent / '.env'
+
+if env_path.exists():
+    load_dotenv(env_path)
+
+is_production = bool(os.getenv("DEVMIND_PRODUCTION", "False"))
+log_level = os.getenv("LOG_LEVEL", "WARNING" if is_production else "DEBUG")
+console_output = bool(os.getenv("LOG_CONSOLE", f"{is_production}"))
+
 setup_logging(
-    level=os.getenv("LOG_LEVEL", "WARNING"),  # ← WARNING para producción
+    level=log_level,
     log_file=os.getenv("LOG_FILE", "~/.devmind/devmind.log"),
-    console_output=os.getenv("LOG_CONSOLE", "False").lower() == "true"
+    console_output=console_output
 )
 
 logger = logging.getLogger(__name__)
-
-env_path = Path(__file__).parent.parent.parent / '.env'
-if env_path.exists():
-    load_dotenv(env_path)
-    logger.debug(f"Loaded environment from {env_path}")
 
 console = Console()
 

@@ -1,4 +1,4 @@
-# devmind-core/core/agents/base.py
+# devmind/core/agents/base.py
 """Base agent compatible with CrewAI 1.9.3+"""
 import json
 import logging
@@ -10,16 +10,14 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, Any, Optional
 
-from core.agents.llm_wrapper import CrewLLMWrapper
-
-
 try:
     from crewai import Agent as CrewAIAgent, LLM as CrewLLM
-
     _HAS_CREWAI = True
 except ImportError:
     _HAS_CREWAI = False
     CrewAIAgent = CrewLLM = None
+
+from .llm_wrapper import CrewLLMWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -38,23 +36,28 @@ class AgentStatus(Enum):
 
 
 class BaseAgent(ABC):
-    DEFAULT_OLLAMA_HOST = os.getenv("OLLAMA_URL")
-    DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+    DEFAULT_OLLAMA_HOST = "http://localhost:11434"
+    DEFAULT_MODEL = "llama3.2:3b"
 
     def __init__(self, name: str, role: str, goal: str, backstory: str,
-                 level: AgentLevel, model: str = DEFAULT_MODEL,
+                 level: AgentLevel, model: str = None,
                  temperature: float = 0.7, verbose: bool = True,
-                 ollama_host: str = DEFAULT_OLLAMA_HOST, **kwargs):
+                 ollama_host: str = None, **kwargs):
+
         self.id = str(uuid.uuid4())
         self.name, self.role, self.goal, self.backstory = name, role, goal, backstory
         self.level, self.temperature = level, temperature
         self.verbose = verbose
-        self.model = model or os.getenv("OLLAMA_MODEL", "qwen3-coder:30b")
-        self.ollama_host = ollama_host or os.getenv("OLLAMA_URL", "http://localhost:11434")
+        # ✅ Leer modelo desde variable de entorno
+        self.model = model or os.getenv("OLLAMA_MODEL", self.DEFAULT_MODEL)
+        self.ollama_host = ollama_host or os.getenv("OLLAMA_URL", self.DEFAULT_OLLAMA_HOST)
+
         self.status = AgentStatus.IDLE
         self.created_at = datetime.now()
         self.last_active = None
         self.tasks_completed = self.tasks_failed = 0
+
+        # ✅ Inicializar LLM con wrapper compatible
         self.llm = self._init_crewai_llm()
         self.crew_agent = self._create_crew_agent()
 
@@ -71,38 +74,46 @@ class BaseAgent(ABC):
             return self._create_mock_llm()
 
         try:
-            logger.info(f"Creating CrewLLM with model: {self.model}, provider: ollama")
+            logger.debug(f"Creating CrewLLM with model: {self.model}, provider: ollama")
 
-            # Crear CrewLLM nativo
+            # --- CORRECCIÓN CRÍTICA ---
+            # CrewAI a menudo requiere el prefijo "ollama/" en el string del modelo
+            # o una configuración explícita para no caer en OpenAI.
+
+            model_string = self.model
+            if not model_string.startswith("ollama/"):
+                model_string = f"ollama/{self.model}"
+
             crew_llm = CrewLLM(
-                model=self.model,
+                model=model_string,  # Usar string con prefijo "ollama/"
                 base_url=self.ollama_host,
-                api_base=self.ollama_host,
-                provider="ollama",  # ← Evita fallback a OpenAI
+                # provider="ollama", # A veces esto causa conflictos en versiones nuevas, mejor usar el prefijo en model
                 temperature=self.temperature,
                 timeout=60,
                 max_tokens=4096
             )
 
-            # ✅ WRAP con interfaz LangChain-compatible
+            # WRAP con interfaz LangChain-compatible (invoke/stream)
             wrapped_llm = CrewLLMWrapper(crew_llm)
 
-            logger.info("✅ CrewLLM wrapped with LangChain-compatible interface")
-            return wrapped_llm  # ← Retornar el wrapper, NO el CrewLLM nativo
+            logger.debug("✅ CrewLLM wrapped with LangChain-compatible interface")
+            return wrapped_llm
 
         except Exception as e:
-            logger.error(f"❌ Failed to initialize CrewLLM: {type(e).__name__}: {e}")
+            logger.error(f"Fallback to mock LLM due to error: {e}")
             return self._create_mock_llm()
 
     @staticmethod
     def _create_mock_llm() -> Any:
+        """Crea mock de LLM para modo offline"""
         from unittest.mock import MagicMock
         mock = MagicMock()
-        mock.invoke.return_value = MagicMock(content="⚠️ Offline mode")
+        mock.invoke.return_value = MagicMock(content="⚠️ Offline mode - agent functional")
         mock.stream.return_value = iter(["⚠️ ", "offline"])
         return mock
 
     def _create_crew_agent(self) -> Optional[Any]:
+        """Crea el agente CrewAI subyacente"""
         if not _HAS_CREWAI:
             return None
         try:
@@ -111,7 +122,8 @@ class BaseAgent(ABC):
                 llm=self.llm, verbose=self.verbose,
                 allow_delegation=(self.level != AgentLevel.EXECUTION)
             )
-        except:
+        except Exception as e:
+            logger.debug(f"Failed to create CrewAI agent: {e}")
             return None
 
     @abstractmethod
@@ -122,11 +134,13 @@ class BaseAgent(ABC):
         return self.status == AgentStatus.IDLE
 
     def get_status(self) -> Dict[str, Any]:
-        return {'id': self.id, 'name': self.name, 'role': self.role,
-                'level': self.level.value, 'status': self.status.value,
-                'tasks_completed': self.tasks_completed,
-                'tasks_failed': self.tasks_failed,
-                'last_active': self.last_active.isoformat() if self.last_active else None}
+        return {
+            'id': self.id, 'name': self.name, 'role': self.role,
+            'level': self.level.value, 'status': self.status.value,
+            'tasks_completed': self.tasks_completed,
+            'tasks_failed': self.tasks_failed,
+            'last_active': self.last_active.isoformat() if self.last_active else None
+        }
 
     def _check_ollama_available(self) -> bool:
         try:
@@ -142,16 +156,20 @@ class BaseAgent(ABC):
             self.last_active = datetime.now()
 
     def _parse_json_response(self, content: str) -> Dict[str, Any]:
-        patterns = [r'\{.*\}', r'```json\s*(.*?)\s*```', r'```.*?\n(.*?)\n```']
-        for pattern in patterns:
-            match = re.search(pattern, content, re.DOTALL)
-            if match:
-                try:
-                    return json.loads(match.group(1) if match.groups() else match.group())
-                except:
-                    continue
+        """Parsea JSON de forma robusta, manejando texto envolvente."""
         try:
+            # Intento directo
             return json.loads(content)
-        except:
+        except json.JSONDecodeError:
             pass
-        return {"raw": content, "content": content}
+
+        # Buscar bloque JSON en el texto
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+        # Fallback: retornar como texto plano
+        return {"action": "respond", "response": content, "raw": True}

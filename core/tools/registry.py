@@ -16,6 +16,8 @@ from .base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
 
+from core.tools.builtin import BUILTIN_TOOLS
+
 
 class ToolRegistry:
     """
@@ -32,12 +34,26 @@ class ToolRegistry:
     _tools: Dict[str, BaseTool]
     _auto_generated_dir: Path
 
+    # Dentro de core/tools/registry.py -> Clase ToolRegistry -> Método __new__
     def __new__(cls) -> 'ToolRegistry':
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._tools = {}
             cls._instance._auto_generated_dir = Path.home() / ".devmind" / "tools" / "auto_generated"
             cls._instance._auto_generated_dir.mkdir(parents=True, exist_ok=True)
+
+            try:
+                from core.tools.builtin import BUILTIN_TOOLS
+                for tool_class in BUILTIN_TOOLS:
+                    try:
+                        instance = tool_class()
+                        cls._instance.register(instance)
+                        logger.debug(f"Auto-loaded builtin tool: {instance.definition.name}")
+                    except Exception as e:
+                        logger.error(f"Failed to load builtin tool {tool_class.__name__}: {e}")
+            except ImportError:
+                logger.warning("Could not import builtin tools.")
+
         return cls._instance
 
     def register(self, tool: BaseTool) -> str:

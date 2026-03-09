@@ -1,26 +1,24 @@
-# devmind-core/core/agents/level1_strategic/architect.py
+# devmind/core/agents/level1_strategic/architect.py
 """
 ArchitectAgent - Arquitecto Principal de Software.
 
 Responsable de:
-- Diseñar arquitectura de sistemas
-- Evaluar tecnologías y patrones
+- Diseñar arquitecturas escalables y mantenibles
+- Evaluar tecnologías y frameworks
 - Documentar decisiones arquitectónicas (ADRs)
-- Validar coherencia técnica del proyecto
+- Establecer patrones y estándares de código
 """
 
-from datetime import datetime
-from typing import Dict, Any
-
+from typing import Dict, Any, List, Optional
 from ..base import BaseAgent, AgentLevel, AgentStatus
 
 
 class ArchitectAgent(BaseAgent):
     """
-    Arquitecto Principal - Diseño y evaluación técnica.
+    Arquitecto Principal - Diseño técnico y decisiones fundamentales.
 
     Nivel: STRATEGIC (1)
-    Especialidad: Patrones, tecnologías, ADRs, coherencia arquitectónica
+    Especialidad: Arquitectura, patrones, evaluación tecnológica
     """
 
     def __init__(self, **kwargs):
@@ -34,30 +32,21 @@ class ArchitectAgent(BaseAgent):
             name="Architect Principal",
             role="Architect Principal",
             goal="Diseñar arquitecturas escalables, evaluar tecnologías y documentar decisiones técnicas fundamentales",
-            backstory="""Eres un Arquitecto de Software Senior con 20+ años de experiencia 
-            diseñando sistemas distribuidos, microservicios y aplicaciones enterprise.
-            Tu enfoque es pragmático: priorizas mantenibilidad, escalabilidad y simplicidad.
-            Documentas cada decisión importante como ADR (Architecture Decision Record).""",
+            backstory="""Eres un Arquitecto de Software senior con 20+ años de experiencia.
+            Has liderado arquitecturas para sistemas de alto tráfico y misión crítica.
+            Tu enfoque es pragmático: soluciones simples que escalen, documentación clara,
+            y decisiones basadas en evidencia. Dominas patrones de diseño, microservicios,
+            event-driven architecture, y evaluación objetiva de tecnologías.""",
             level=AgentLevel.STRATEGIC,
             **kwargs
         )
 
     def execute(self, task: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """
-        Ejecuta tareas de arquitectura de software.
-
-        Args:
-            task: Descripción de la tarea arquitectónica
-            context: Contexto adicional (stack, restricciones, etc.)
-
-        Returns:
-            Dict con análisis, recomendaciones y ADRs generados
-        """
+        """Ejecuta tareas de arquitectura"""
         self._update_status(AgentStatus.WORKING)
         context = context or {}
 
         try:
-            # Clasificar tipo de tarea arquitectónica
             task_type = self._classify_architecture_task(task)
 
             if task_type == "design":
@@ -66,38 +55,33 @@ class ArchitectAgent(BaseAgent):
                 result = self._evaluate_technology(task, context)
             elif task_type == "adr":
                 result = self._create_adr(task, context)
-            elif task_type == "review":
-                result = self._review_architecture(task, context)
+            elif task_type == "patterns":
+                result = self._recommend_patterns(task, context)
             else:
-                result = self._general_architecture_consultation(task, context)
+                result = self._general_architecture_task(task, context)
 
             self.tasks_completed += 1
             return result
 
         except Exception as e:
             self.tasks_failed += 1
-            return {
-                "error": str(e),
-                "success": False,
-                "task": task
-            }
+            return {"error": str(e), "success": False}
         finally:
             self._update_status(AgentStatus.IDLE)
 
     def _classify_architecture_task(self, task: str) -> str:
-        """Clasifica el tipo de tarea arquitectónica"""
+        """Clasifica el tipo de tarea de arquitectura"""
         task_lower = task.lower()
 
-        if any(kw in task_lower for kw in ["diseñar", "arquitectura", "estructura", "patron"]):
+        if any(kw in task_lower for kw in ["diseñar", "arquitectura", "estructura", "diagrama"]):
             return "design"
-        elif any(kw in task_lower for kw in ["evaluar", "comparar", "tecnología", "stack", "librería"]):
+        elif any(kw in task_lower for kw in ["evaluar", "comparar", "tecnología", "framework", "librería"]):
             return "evaluate"
         elif any(kw in task_lower for kw in ["decisión", "adr", "documentar", "registro"]):
             return "adr"
-        elif any(kw in task_lower for kw in ["revisar", "auditar", "validar", "coherencia"]):
-            return "review"
-        else:
-            return "general"
+        elif any(kw in task_lower for kw in ["patrón", "pattern", "mejor práctica", "estándar"]):
+            return "patterns"
+        return "general"
 
     def _design_architecture(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """Diseña arquitectura de sistema"""
@@ -106,20 +90,17 @@ class ArchitectAgent(BaseAgent):
 
         SOLICITUD: {task}
 
-        CONTEXTO TÉCNICO:
-        {context.get('tech_stack', 'No especificado')}
+        CONTEXTO: {context}
 
-        RESTRICCIONES:
-        {context.get('constraints', 'Ninguna especificada')}
+        REQUISITOS:
+        - Diagrama de componentes de alto nivel
+        - Flujos de datos principales
+        - Puntos de integración externa
+        - Estrategia de escalabilidad
+        - Consideraciones de seguridad
+        - Tecnologías recomendadas con justificación
 
-        Proporciona un diseño estructurado con:
-        1. Estilo arquitectónico recomendado (monolito, microservicios, event-driven, etc.)
-        2. Diagrama de componentes en formato texto (Mermaid o descripción)
-        3. Tecnologías clave por capa (frontend, backend, datos, infra)
-        4. Patrones de diseño aplicados y justificación
-        5. Consideraciones de escalabilidad y resiliencia
-        6. Puntos de extensión futuros
-
+        Proporciona la arquitectura en formato estructurado JSON.
         Responde en formato JSON válido.
         """
 
@@ -128,32 +109,28 @@ class ArchitectAgent(BaseAgent):
 
         return {
             "content": design.get("content", str(design)),
-            "architecture_design": design,
-            "recommendations": design.get("recommendations", []),
+            "architecture": design,
+            "diagrams": design.get("diagrams", []),
             "success": True
         }
 
     def _evaluate_technology(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Evalúa tecnologías o stacks"""
+        """Evalúa tecnologías para caso de uso específico"""
         prompt = f"""
-        Como Arquitecto Principal, evalúa esta tecnología/stack:
+        Como Arquitecto Principal, evalúa tecnologías para:
 
         SOLICITUD: {task}
 
-        CRITERIOS DE EVALUACIÓN:
-        - Madurez y comunidad
-        - Rendimiento y escalabilidad
-        - Curva de aprendizaje
-        - Costo total de propiedad
-        - Compatibilidad con stack actual: {context.get('current_stack', 'N/A')}
+        CONTEXTO: {context}
 
-        Proporciona:
-        1. Score general (0-100)
-        2. Pros y contras estructurados
-        3. Casos de uso ideales
-        4. Alternativas a considerar
-        5. Recomendación final con justificación
+        REQUISITOS:
+        - Comparativa de 3-5 opciones relevantes
+        - Pros y contras de cada una
+        - Criterios: rendimiento, mantenibilidad, comunidad, costos
+        - Recomendación final con justificación
+        - Riesgos y mitigaciones
 
+        Proporciona evaluación en formato estructurado JSON.
         Responde en formato JSON válido.
         """
 
@@ -162,35 +139,31 @@ class ArchitectAgent(BaseAgent):
 
         return {
             "content": evaluation.get("content", str(evaluation)),
-            "technology_evaluation": evaluation,
+            "evaluation": evaluation,
             "recommendation": evaluation.get("recommendation"),
-            "score": evaluation.get("score"),
             "success": True
         }
 
     def _create_adr(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Crea Architecture Decision Record (ADR)"""
+        """Crea Architectural Decision Record (ADR)"""
         prompt = f"""
-        Como Arquitecto Principal, documenta esta decisión arquitectónica:
+        Como Arquitecto Principal, documenta una decisión arquitectónica:
 
-        TÍTULO: {task}
+        SOLICITUD: {task}
 
-        CONTEXTO:
-        {context.get('context', 'No especificado')}
+        CONTEXTO: {context}
 
-        Genera un ADR completo con:
-        1. Title: Título claro de la decisión
-        2. Status: proposed | accepted | deprecated | superseded
-        3. Context: Situación que motivó la decisión
-        4. Decision: Decisión tomada (clara y accionable)
-        5. Consequences: 
-           - Positivas (beneficios)
-           - Negativas (trade-offs)
-           - Neutrales (impactos laterales)
-        6. Alternatives: Opciones consideradas y por qué se rechazaron
-        7. Compliance: Cómo se verificará que se cumple la decisión
+        FORMATO ADR:
+        - Título: Decisión clara y concisa
+        - Estado: Proposed/Accepted/Deprecated/Superseded
+        - Contexto: Situación y fuerzas que motivan la decisión
+        - Decisión: Qué se decidió y por qué
+        - Consecuencias: Impactos positivos y negativos
+        - Alternativas consideradas: Otras opciones evaluadas
+        - Referencias: Links a documentación relevante
 
-        Formato de salida JSON válido.
+        Proporciona ADR completo en formato JSON.
+        Responde en formato JSON válido.
         """
 
         response = self.llm.invoke(prompt)
@@ -199,65 +172,53 @@ class ArchitectAgent(BaseAgent):
         return {
             "content": adr.get("content", str(adr)),
             "adr": adr,
-            "adr_id": f"ADR-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+            "adr_id": adr.get("id"),
             "success": True
         }
 
-    def _review_architecture(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Revisa arquitectura existente"""
+    def _recommend_patterns(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Recomienda patrones de diseño/arquitectura"""
         prompt = f"""
-        Como Arquitecto Principal, revisa esta arquitectura:
+        Como Arquitecto Principal, recomienda patrones para:
 
-        DESCRIPCIÓN: {task}
+        SOLICITUD: {task}
 
-        DIAGRAMA/CÓDIGO:
-        {context.get('architecture_description', 'No proporcionado')}
+        CONTEXTO: {context}
 
-        Realiza una revisión técnica con:
-        1. Puntos fuertes identificados
-        2. Riesgos arquitectónicos detectados
-        3. Violaciones de principios (SOLID, 12-factor, etc.)
-        4. Recomendaciones de mejora priorizadas (crítico/alto/medio/bajo)
-        5. Métricas sugeridas para monitorear salud arquitectónica
+        REQUISITOS:
+        - Patrones aplicables al problema
+        - Cuándo usar cada patrón
+        - Cuándo NO usar cada patrón
+        - Ejemplos de implementación
+        - Anti-patrones a evitar
 
+        Proporciona recomendaciones en formato estructurado JSON.
         Responde en formato JSON válido.
         """
 
         response = self.llm.invoke(prompt)
-        review = self._parse_json_response(response.content)
+        patterns = self._parse_json_response(response.content)
 
         return {
-            "content": review.get("content", str(review)),
-            "architecture_review": review,
-            "risks": review.get("risks", []),
-            "recommendations": review.get("recommendations", []),
+            "content": patterns.get("content", str(patterns)),
+            "patterns": patterns,
             "success": True
         }
 
-    def _general_architecture_consultation(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Consulta arquitectónica general"""
+    def _general_architecture_task(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Tarea de arquitectura general"""
         prompt = f"""
-        Como Arquitecto Principal, responde esta consulta:
+        Como Arquitecto Principal, responde:
 
-        CONSULTA: {task}
+        SOLICITUD: {task}
 
-        CONTEXTO ADICIONAL:
-        {context}
+        CONTEXTO: {context}
 
-        Proporciona una respuesta técnica completa con:
-        1. Análisis del problema
-        2. Opciones de solución
-        3. Recomendación con justificación
-        4. Próximos pasos sugeridos
-
+        Proporciona una solución arquitectónica completa con justificación técnica.
         Responde en formato JSON válido.
         """
 
         response = self.llm.invoke(prompt)
-        consultation = self._parse_json_response(response.content)
+        result = self._parse_json_response(response.content)
 
-        return {
-            "content": consultation.get("content", str(consultation)),
-            "consultation": consultation,
-            "success": True
-        }
+        return {"content": result.get("content", str(result)), "success": True}

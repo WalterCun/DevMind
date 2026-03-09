@@ -1,18 +1,21 @@
-# devmind-core/cli/commands/chat.py
+# cli/commands/chat.py
 """
 Comando chat para DevMind Core.
 Proporciona interfaz interactiva de conversación con el agente.
 """
 
 import asyncio
+import os
+import sys
+from pathlib import Path
 
 import click
 from rich.console import Console
-from rich.json import JSON
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from cli.context import ContextManager
 from core.config.manager import ConfigManager
 from core.orchestrator import DevMindOrchestrator
 
@@ -20,12 +23,12 @@ console = Console()
 
 
 @click.command('chat')
-@click.option('--project', '-p', 'project_id', help='ID del proyecto')
+@click.option('--project', '-p', 'project_path', type=click.Path(), default=".", help='Directorio del proyecto')
 @click.option('--clear', '-c', is_flag=True, help='Limpiar contexto e iniciar nuevo')
 @click.option('--stream', '-s', is_flag=True, help='Streaming de respuesta token por token')
-@click.option('--json', '-j', 'output_json', is_flag=True, help='✅ Mostrar respuesta en JSON (default: texto natural)')
+@click.option('--json', '-j', 'output_json', is_flag=True, help='Mostrar respuesta en JSON (default: texto natural)')
 @click.argument('initial_message', nargs=1, required=False)
-def chat_command(project_id: str, clear: bool, stream: bool, output_json: bool, initial_message: str):
+def chat_command(project_path: str, clear: bool, stream: bool, output_json: bool, initial_message: str):
     """💬 Conversación interactiva con el agente
 
     Ejemplos:
@@ -35,9 +38,24 @@ def chat_command(project_id: str, clear: bool, stream: bool, output_json: bool, 
       devmind chat --json "Mostrar config"
     """
 
-    # Cargar configuración
-    config = ConfigManager().get_config()
-    if not config:
+    # 1. Configuración del Contexto del Proyecto
+    target_path = Path(project_path)
+
+    # Crear directorio si no existe
+    if not target_path.exists():
+        console.print(f"[yellow]Directorio no encontrado. Creando: {target_path.resolve()}[/yellow]")
+        try:
+            target_path.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            console.print(f"[red]❌ Error creando directorio: {e}[/red]")
+            return
+
+    abs_project_path = str(target_path.resolve())
+    os.environ["PROJECT_ROOT"] = abs_project_path
+
+    # 2. Cargar Configuración
+    config_manager = ConfigManager()
+    if not config_manager.is_initialized():
         console.print(Panel(
             "[yellow]⚠️ Configuración no inicializada[/yellow]\n"
             "Ejecutá [bold]devmind init[/bold] primero",
@@ -45,9 +63,21 @@ def chat_command(project_id: str, clear: bool, stream: bool, output_json: bool, 
         ))
         return
 
-    # Inicializar orquestador
+    config = config_manager.get_config()
+
+    console.print(Panel.fit(
+        f"[bold]💬 Modo:[/bold] CHAT\n"
+        f"[bold]🤖 Agente:[/bold] {config.agent_name}\n"
+        f"[bold]⚡ Autonomía:[/bold] {config.autonomy_mode.value}\n"
+        f"[bold green]📂 Proyecto:[/bold green] {abs_project_path}",
+        title="DevMind Chat",
+        style="cyan"
+    ))
+    console.print()
+
+    # 3. Inicializar Orquestador
     orchestrator = DevMindOrchestrator(
-        project_id=project_id,
+        project_id=target_path.name,  # Usar nombre de carpeta como ID
         config=config
     )
 
@@ -55,42 +85,32 @@ def chat_command(project_id: str, clear: bool, stream: bool, output_json: bool, 
         console.print("[red]❌ Error inicializando el orchestrator[/red]")
         return
 
-        # Mostrar banner (solo en modo interactivo o sin mensaje inicial)
-    if not initial_message:
-        console.print(Panel.fit(
-            f"[bold]💬 Modo:[/bold] CHAT\n"
-            f"[bold]🤖 Agente:[/bold] {config.agent_name}\n"
-            f"[bold]⚡ Autonomía:[/bold] {config.autonomy_mode.value}",
-            title="DevMind Chat",
-            style="cyan"
-        ))
-        console.print()
+    # 4. Manejar limpieza de contexto
+    context_manager = ContextManager()
+    if clear:
+        context_manager.clear()
+        console.print("[dim]🧹 Contexto limpiado.[/dim] \n")
 
-        # Bucle principal de chat
     session_id = None
 
-    # Si hay mensaje inicial, procesarlo primero
+    # 5. Procesar mensaje inicial si existe
     if initial_message:
         console.print(f"[bold green]Tú[/bold green]: {initial_message}")
         console.print()
-        console.print("[bold blue]Jarvis[/bold blue] está pensando...")
 
-        result = asyncio.run(
-            orchestrator.process_message(
-                message=initial_message,
-                session_id=session_id,
-                output_json=output_json
+        with console.status("[bold blue]Jarvis está pensando y actuando...[/bold blue]", spinner="dots"):
+            result = asyncio.run(
+                orchestrator.execute_autonomous_task(
+                    task=initial_message,
+                    session_id=session_id
+                )
             )
-        )
 
-        _display_response(result, stream, output_json)
-
-        if result.get("session_id"):
-            session_id = result["session_id"]
-
+        _display_response(result, output_json)
+        session_id = result.get("session_id")
         console.print()
 
-    # Modo interactivo: leer mensajes del usuario
+    # 6. Bucle Principal Interactivo
     while True:
         try:
             # Obtener mensaje del usuario
@@ -105,7 +125,7 @@ def chat_command(project_id: str, clear: bool, stream: bool, output_json: bool, 
                 _show_help()
                 continue
 
-            if user_input.lower() in ['/clear', '/cls'] or clear:
+            if user_input.lower() in ['/clear', '/cls']:
                 console.print("[dim]🧹 Contexto limpiado[/dim]")
                 session_id = None
                 continue
@@ -117,20 +137,28 @@ def chat_command(project_id: str, clear: bool, stream: bool, output_json: bool, 
                     f"[dim]📋 Modo JSON: {'[green]Activado[/green]' if output_json else '[yellow]Desactivado[/yellow]'}[/dim]")
                 continue
 
-            # Procesar mensaje
+            # Procesar mensaje con el orquestador autónomo
             console.print()
-            console.print("[bold blue]Jarvis[/bold blue] está pensando...")
 
-            result = asyncio.run(
-                orchestrator.process_message(
-                    message=user_input,
-                    session_id=session_id,
-                    output_json=output_json  # ✅ Pasar flag JSON
-                )
-            )
+            with console.status("[bold blue]Jarvis está pensando y actuando...[/bold blue]", spinner="dots"):
+                try:
+                    result = asyncio.run(
+                        orchestrator.execute_autonomous_task(
+                            task=user_input,
+                            session_id=session_id
+                        )
+                    )
+                except KeyboardInterrupt:
+                    # Manejar Ctrl+C durante la ejecución
+                    console.print("\n[yellow]⚠️ Ejecución interrumpida por el usuario[/yellow]")
+                    continue
+                except Exception as e:
+                    console.print(f"\n[red]❌ Error crítico en ejecución: {str(e)}[/red]")
+                    logger.error(f"Error en execute_autonomous_task: {e}", exc_info=True)
+                    continue
 
-            _display_response(result, stream, output_json)
-
+            # Mostrar respuesta
+            _display_response(result, output_json)
             console.print()
 
             # Guardar session_id para contexto continuo
@@ -138,30 +166,35 @@ def chat_command(project_id: str, clear: bool, stream: bool, output_json: bool, 
                 session_id = result["session_id"]
 
         except KeyboardInterrupt:
-            console.print("\n[dim]⚠️ Interrumpido por usuario[/dim]")
+            console.print("\n[dim]👋 Saliendo... (Presiona Ctrl+C de nuevo para forzar salida)[/dim]")
             break
         except Exception as e:
-            console.print(f"[red]❌ Error procesando mensaje: {type(e).__name__}: {e}[/red]")
-            console.print("[dim]Tip: Usá /help para ver comandos disponibles[/dim]")
+            console.print(f"[red]❌ Error inesperado: {str(e)}[/red]")
+            logger.error(f"Error en loop principal de chat: {e}", exc_info=True)
             break
 
     # Cleanup
-    asyncio.run(orchestrator.shutdown())
+    try:
+        asyncio.run(orchestrator.shutdown())
+    except:
+        pass
 
 
-def _display_response(result: dict, stream: bool, output_json: bool):
+def _display_response(result: dict, output_json: bool = False) -> None:
     """Muestra la respuesta del agente con formato adecuado"""
 
     if result.get("error"):
         console.print(f"[red]❌ Error: {result['error']}[/red]")
         return
 
-    # ✅ Si se solicitó JSON, mostrar raw JSON
+    # Si se solicitó JSON, mostrar raw JSON
     if output_json:
+        from rich.json import JSON
+        import json
         console.print(JSON.from_data(result, indent=2))
         return
 
-    # ✅ Formato natural por defecto
+    # Formato natural por defecto
     response = result.get("response") or result.get("content", "")
 
     # Si response es un string que parece JSON, intentar parsear y formatear
@@ -170,59 +203,32 @@ def _display_response(result: dict, stream: bool, output_json: bool):
             import json
             parsed = json.loads(response)
 
-            # ✅ Extraer contenido legible del JSON
+            # Extraer contenido legible del JSON
             if isinstance(parsed, dict):
-                # Buscar campos comunes de contenido
                 content_fields = ['content', 'response', 'answer', 'output_text', 'message']
                 for field in content_fields:
                     if field in parsed:
                         response = parsed[field]
                         break
                 else:
-                    # Si no hay campo obvio, formatear como texto estructurado
-                    response = _format_structured_data(parsed)
-            else:
-                response = str(parsed)
-
+                    # Si no hay campo obvio, usar el JSON formateado
+                    response = f"```json\n{json.dumps(parsed, indent=2)}\n```"
         except (json.JSONDecodeError, Exception):
             pass  # Mantener response original si falla el parseo
 
-    # Mostrar respuesta formateada
-    if stream:
-        for chunk in _stream_text(response):
-            console.print(chunk, end="", highlight=False)
-        console.print()
-    else:
-        # ✅ Usar Markdown para mejor formato
-        console.print(Markdown(response))
+    # Mostrar respuesta formateada como Markdown
+    console.print("[bold blue]Jarvis[/bold blue]:")
+    console.print(Markdown(response))
 
-    # Mostrar sugerencias si existen (solo en modo natural)
+    # Mostrar información de iteraciones si fue tarea autónoma
+    if result.get("iterations", 0) > 1:
+        console.print(f"\n[dim]ℹ️ Tarea completada en {result['iterations']} pasos autónomos.[/dim]")
+
+    # Mostrar sugerencias si existen
     if result.get("suggestions"):
         console.print("\n[bold]💡 Sugerencias:[/bold]")
         for suggestion in result["suggestions"][:3]:
             console.print(f"  • {suggestion}")
-
-
-def _format_structured_data(data: dict, indent: int = 0) -> str:
-    """Convierte datos estructurados a texto legible"""
-    lines = []
-    prefix = "  " * indent
-
-    for key, value in data.items():
-        if isinstance(value, dict):
-            lines.append(f"{prefix}[bold]{key}:[/bold]")
-            lines.append(_format_structured_data(value, indent + 1))
-        elif isinstance(value, list):
-            lines.append(f"{prefix}[bold]{key}:[/bold]")
-            for item in value:
-                if isinstance(item, dict):
-                    lines.append(f"{prefix}  • {_format_structured_data(item, 0)}")
-                else:
-                    lines.append(f"{prefix}  • {item}")
-        else:
-            lines.append(f"{prefix}[bold]{key}:[/bold] {value}")
-
-    return "\n".join(lines)
 
 
 def _show_help():
@@ -241,12 +247,6 @@ def _show_help():
         title="📖 Ayuda de Chat",
         style="green"
     ))
-
-
-def _stream_text(text: str, chunk_size: int = 10):
-    """Generador para streaming de texto (simulado)"""
-    for i in range(0, len(text), chunk_size):
-        yield text[i:i + chunk_size]
 
 
 if __name__ == '__main__':

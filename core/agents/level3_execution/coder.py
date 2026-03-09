@@ -1,34 +1,24 @@
-# devmind-core/core/agents/level3_execution/coder.py
+# core/agents/level3_execution/coder.py
 """
-CoderAgent - Generación y refactorización de código.
-
-Responsable de:
-- Escribir código limpio y funcional
-- Refactorizar código existente
-- Implementar features específicas
-- Seguir mejores prácticas
+CoderAgent - Generación y refactorización de código con razonamiento estructurado.
 """
 
+import json
+import logging
+import re
 from typing import Dict, Any
 
 from ..base import BaseAgent, AgentLevel, AgentStatus
 
+logger = logging.getLogger(__name__)
+
 
 class CoderAgent(BaseAgent):
     """
-    Coder - Generación de código, refactor, snippets.
-
-    Nivel: EXECUTION (3)
-    Especialidad: Implementación, código limpio, mejores prácticas
+    Coder - Generación de código con capacidad de planificación autónoma.
     """
 
     def __init__(self, **kwargs):
-        """
-        Inicializa el agente coder.
-
-        Args:
-            **kwargs: Parámetros para BaseAgent (model, temperature, etc.)
-        """
         super().__init__(
             name="Coder Agent",
             role="Coder Agent",
@@ -42,261 +32,61 @@ class CoderAgent(BaseAgent):
         )
 
     def execute(self, task: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Ejecuta tareas de codificación"""
+        """Ejecuta tareas de codificación con razonamiento"""
         self._update_status(AgentStatus.WORKING)
         context = context or {}
 
         try:
-            task_type = self._classify_coding_task(task)
+            # Prompt de Sistema con estructura ReAct
+            system_prompt = """
+Eres un Ingeniero de Software Senior especializado en desarrollo autónomo.
+Tu proceso de trabajo es ESTRICTO:
 
-            if task_type == "create":
-                result = self._create_code(task, context)
-            elif task_type == "refactor":
-                result = self._refactor_code(task, context)
-            elif task_type == "fix":
-                result = self._fix_bug(task, context)
-            elif task_type == "implement":
-                result = self._implement_feature(task, context)
-            else:
-                result = self._general_coding_task(task, context)
+1. ANALIZA: Lee el contexto del proyecto proporcionado.
+2. PLANIFICA: Desglosa la tarea en pasos pequeños y atómicos.
+3. EJECUTA: Usa las herramientas disponibles (write_file, run_command) para implementar UN SOLO PASO a la vez.
+4. VERIFICA: Después de cada acción, observa el resultado.
+
+REGLAS DE ORO:
+- NUNCA escribas código sin verificar si el archivo ya existe.
+- Si encuentras un error, analiza el traceback ANTES de intentar corregirlo.
+- Si instalas dependencias, usa comandos específicos (ej: pip install numpy).
+- Responde SIEMPRE en formato JSON válido con la estructura especificada.
+
+Formato de respuesta JSON obligatorio:
+{
+    "thought": "Tu razonamiento sobre qué hacer",
+    "action": "tool_use" o "respond",
+    "tool_name": "nombre_herramienta" (si action es tool_use),
+    "tool_args": { "arg": "value" } (si action es tool_use),
+    "content": "Mensaje para el usuario si action es respond"
+}
+"""
+
+            # Prompt de Usuario
+            user_prompt = f"""
+Contexto del proyecto:
+{json.dumps(context.get('project_status', {}), indent=2, ensure_ascii=False)}
+
+Tarea: {task}
+
+Responde SOLO con el JSON de acción.
+"""
+
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+
+            # Llamada al LLM
+            response = self.llm.invoke(full_prompt)
+            content = response.content if hasattr(response, 'content') else str(response)
 
             self.tasks_completed += 1
-            return result
+            return {
+                "content": content,
+                "success": True
+            }
 
         except Exception as e:
             self.tasks_failed += 1
             return {"error": str(e), "success": False}
         finally:
             self._update_status(AgentStatus.IDLE)
-
-    def _classify_coding_task(self, task: str) -> str:
-        """Clasifica el tipo de tarea de coding"""
-        task_lower = task.lower()
-
-        if any(kw in task_lower for kw in ["crear", "create", "nuevo", "escribir"]):
-            return "create"
-        elif any(kw in task_lower for kw in ["refactor", "refactorizar", "mejorar", "limpiar"]):
-            return "refactor"
-        elif any(kw in task_lower for kw in ["fix", "corregir", "bug", "error", "arreglar"]):
-            return "fix"
-        elif any(kw in task_lower for kw in ["implementar", "feature", "funcionalidad"]):
-            return "implement"
-        return "general"
-
-    def _check_file_state(self, file_path: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Verifica el estado actual de un archivo antes de modificarlo.
-
-        Args:
-            file_path: Ruta del archivo a verificar
-            context: Contexto con información del proyecto
-
-        Returns:
-            Dict con estado del archivo o indicación de que no existe
-        """
-        import os
-        from pathlib import Path
-
-        # Si sandbox está habilitado, verificar en sandbox
-        if context.get("sandbox_enabled", True):
-            sandbox_root = context.get("sandbox_root", "./sandbox")
-            full_path = Path(sandbox_root) / file_path
-        else:
-            full_path = Path(file_path)
-
-        if not full_path.exists():
-            return {
-                "exists": False,
-                "message": f"El archivo {file_path} no existe. ¿Deseas crearlo?",
-                "action_required": "confirm_create"
-            }
-
-        # Leer contenido actual
-        try:
-            with open(full_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            return {
-                "exists": True,
-                "size": len(content),
-                "lines": content.count('\n') + 1,
-                "last_modified": os.path.getmtime(full_path),
-                "preview": content[:500] + ("..." if len(content) > 500 else ""),
-                "message": f"El archivo {file_path} existe ({os.path.getsize(full_path)} bytes). ¿Deseas modificarlo?",
-                "action_required": "confirm_modify"
-            }
-        except Exception as e:
-            return {
-                "exists": True,
-                "error": str(e),
-                "message": f"No se pudo leer {file_path}: {e}",
-                "action_required": "error"}
-
-    def _create_code(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Crea código nuevo"""
-        file_path = context.get("file_path")
-        if file_path:
-            file_state = self._check_file_state(file_path, context)
-
-            # Si requiere confirmación, retornar solicitud al usuario
-            if file_state.get("action_required") in ["confirm_create", "confirm_modify"]:
-                return {
-                    "content": file_state["message"],
-                    "file_state": file_state,
-                    "requires_confirmation": True,
-                    "success": True
-                }
-            elif file_state.get("action_required") == "error":
-                return {
-                    "content": f"⚠️ {file_state['message']}",
-                    "error": file_state.get("error"),
-                    "success": False
-                }
-
-        language = context.get("language", "python")
-        framework = context.get("framework", "")
-
-        prompt = f"""
-        Como desarrollador experto, crea código para:
-
-        SOLICITUD: {task}
-
-        LENGUAJE: {language}
-        FRAMEWORK: {framework if framework else 'N/A'}
-
-        REQUISITOS:
-        - Código limpio y legible
-        - Type hints completos
-        - Docstrings apropiados
-        - Manejo de errores
-        - Tests básicos incluidos
-
-        Proporciona código completo listo para usar.
-        Responde en formato JSON válido.
-        """
-
-        response = self.llm.invoke(prompt)
-        code_result = self._parse_json_response(response.content)
-
-        return {
-            "content": code_result.get("content", str(code_result)),
-            "code": code_result.get("code", ""),
-            "language": language,
-            "filename": code_result.get("filename", ""),
-            "success": True
-        }
-
-    def _refactor_code(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Refactoriza código existente"""
-        code = context.get("code", "")
-
-        prompt = f"""
-        Como desarrollador experto, refactoriza este código:
-
-        SOLICITUD: {task}
-
-        CÓDIGO ORIGINAL:
-        {code if code else 'No proporcionado'}
-
-        REQUISITOS:
-        - Mejorar legibilidad
-        - Reducir complejidad
-        - Aplicar principios SOLID
-        - Extraer funciones/métodos
-        - Mejorar nombres
-
-        Proporciona código refactorizado con explicación de cambios.
-        Responde en formato JSON válido.
-        """
-
-        response = self.llm.invoke(prompt)
-        refactor_result = self._parse_json_response(response.content)
-
-        return {
-            "content": refactor_result.get("content", str(refactor_result)),
-            "refactored_code": refactor_result.get("code", ""),
-            "changes": refactor_result.get("changes", []),
-            "success": True
-        }
-
-    def _fix_bug(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Corrige bugs"""
-        code = context.get("code", "")
-        error = context.get("error", "")
-
-        prompt = f"""
-        Como desarrollador experto, corrige este bug:
-
-        SOLICITUD: {task}
-
-        CÓDIGO:
-        {code if code else 'No proporcionado'}
-
-        ERROR:
-        {error if error else 'No proporcionado'}
-
-        REQUISITOS:
-        - Identificar causa raíz
-        - Corregir sin romper funcionalidad existente
-        - Agregar tests para el bug
-        - Explicar la solución
-
-        Proporciona código corregido completo.
-        Responde en formato JSON válido.
-        """
-
-        response = self.llm.invoke(prompt)
-        fix_result = self._parse_json_response(response.content)
-
-        return {
-            "content": fix_result.get("content", str(fix_result)),
-            "fixed_code": fix_result.get("code", ""),
-            "root_cause": fix_result.get("root_cause", ""),
-            "success": True
-        }
-
-    def _implement_feature(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Implementa features"""
-        prompt = f"""
-        Como desarrollador experto, implementa esta feature:
-
-        SOLICITUD: {task}
-
-        CONTEXTO: {context}
-
-        REQUISITOS:
-        - Implementación completa
-        - Integración con código existente
-        - Tests incluidos
-        - Documentación
-
-        Proporciona código completo de la feature.
-        Responde en formato JSON válido.
-        """
-
-        response = self.llm.invoke(prompt)
-        feature_result = self._parse_json_response(response.content)
-
-        return {
-            "content": feature_result.get("content", str(feature_result)),
-            "code": feature_result.get("code", ""),
-            "success": True
-        }
-
-    def _general_coding_task(self, task: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Tarea de coding general"""
-        prompt = f"""
-        Como desarrollador experto, responde:
-
-        SOLICITUD: {task}
-
-        CONTEXTO: {context}
-
-        Proporciona una solución técnica completa con código si es necesario.
-        Responde en formato JSON válido.
-        """
-
-        response = self.llm.invoke(prompt)
-        result = self._parse_json_response(response.content)
-
-        return {"content": result.get("content", str(result)), "success": True}
